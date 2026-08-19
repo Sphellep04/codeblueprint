@@ -38,6 +38,6 @@ export function printReport(summary: Summary): void {
   process.stdout.write(formatReport(summary) + "\n");
 }
 
-export function printJson(summary: Summary): void {
-  process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
+export function printJson(data: unknown): void {
+  process.stdout.write(JSON.stringify(data, null, 2) + "\n");
 }

@@ -35,3 +35,46 @@ export interface Summary {
   cycles: CycleGroup[];
   orphanFilePaths: string[];
 }
+
+export type SymbolKind = "function" | "method" | "class" | "component";
+
+export interface SymbolModel {
+  /** Deterministic within one analysis run: `${filePath}#${name}:${declarationLine}`. */
+  id: string;
+  /** "default" for an anonymous default export. */
+  name: string;
+  kind: SymbolKind;
+  filePath: string;
+  line: number;
+  exported: boolean;
+}
+
+export type FileEdgeKind = "import" | "reExport";
+
+export interface FileEdge {
+  kind: FileEdgeKind;
+  from: string;
+  to: string;
+}
+
+/** File-to-symbol: an import statement isn't itself a symbol. */
+export interface ImportEdge {
+  file: string;
+  symbol: string;
+}
+
+export type UsageKind = "calls" | "renders";
+
+/** Symbol-to-symbol: the "from" is always a real declared symbol whose body contains the usage site. */
+export interface SymbolUsageEdge {
+  kind: UsageKind;
+  from: string;
+  to: string;
+}
+
+export interface CodeGraph {
+  files: FileEdge[];
+  symbols: SymbolModel[];
+  imports: ImportEdge[];
+  usages: SymbolUsageEdge[];
+}

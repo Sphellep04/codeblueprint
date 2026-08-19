@@ -13,7 +13,9 @@ import {
 import { countComponents } from "./componentHeuristics";
 import { buildGraph, inDegrees, findCycles } from "./graph";
 import { computeEntryPoints } from "./entrypoints";
-import { FileModel, ProjectModel, Summary } from "./model";
+import { buildCodeGraph } from "./codeGraph";
+import { FileModel, ProjectModel, Summary, CodeGraph } from "./model";
+import { SourceFile } from "ts-morph";
 
 export class CodeAtlasError extends Error {}
 
@@ -30,7 +32,7 @@ function resolveProjectName(rootAbs: string): string {
   return path.basename(rootAbs);
 }
 
-export function buildProjectModel(rootDir: string): ProjectModel {
+function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFile[] } {
   const rootAbs = path.resolve(rootDir);
 
   if (!fs.existsSync(rootAbs)) {
@@ -46,6 +48,12 @@ export function buildProjectModel(rootDir: string): ProjectModel {
   if (sourceFiles.length === 0) {
     throw new CodeAtlasError(`no JavaScript/TypeScript source files found in "${rootDir}".`);
   }
+
+  return { rootAbs, sourceFiles };
+}
+
+export function buildProjectModel(rootDir: string): ProjectModel {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
 
   const filePaths = sourceFiles.map((sf) => sf.getFilePath());
   const entryPoints = computeEntryPoints(rootAbs, filePaths);
@@ -105,4 +113,9 @@ function sum(files: FileModel[], pick: (f: FileModel) => number): number {
 export function runAnalysis(rootDir: string): Summary {
   const model = buildProjectModel(rootDir);
   return summarize(model);
+}
+
+export function runGraphAnalysis(rootDir: string): CodeGraph {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
+  return buildCodeGraph(sourceFiles, rootAbs);
 }

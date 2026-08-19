@@ -7,6 +7,7 @@ Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structu
 ```
 codeatlas <path>
 codeatlas <path> --json
+codeatlas <path> --graph
 codeatlas --version
 ```
 
@@ -41,6 +42,8 @@ Orphan files        8
 
 `--json` prints the same data as a `Summary` object (see `src/model.ts`), including the raw file lists for each circular-dependency cluster and each orphan file — useful for scripting or as a stepping stone for Phase 2's graph visualization.
 
+`--graph` prints a `CodeGraph` object instead: file-level import/re-export edges, every function/method/class/component declaration as a `SymbolModel`, which files import which specific symbols, and symbol-to-symbol `calls`/`renders` usage edges (e.g. `authService.ts#login` calls `db.ts#query`, `App.tsx#App` renders `Header.tsx#Header`). This is the relationship data Phase 3's graph explorer will render — see "Known Phase 2 limitations" below for what it deliberately doesn't resolve. It's a separate flag from `--json` (not merged into `Summary`) so existing `--json` scripting consumers don't see their payload shape change, and so the extra language-service work it does is only paid when actually asked for.
+
 ## Metrics — what's actually counted
 
 - **Files**: `.js/.jsx/.ts/.tsx/.mjs/.cjs/.mts/.cts` files, excluding `node_modules`, `dist`, `build`, `.next`, `out`, `.git`, `coverage`, and anything matched by the project's own `.gitignore`. `.d.ts` files are excluded.
@@ -54,13 +57,24 @@ Orphan files        8
 
 ## Known Phase 1 limitations
 
-- **Monorepo/workspace-unaware**: a single scan is treated as one flat project. A file only imported from a sibling workspace package (`packages/*`) outside the scanned root will be misreported as an orphan. Deferred to a later phase.
-- **CommonJS-only files** (`module.exports`/`require()`) show 0 imports/exports and contribute no graph edges — they'll typically surface as false-positive orphans even when actually used. The `fixtures/basic-react-app/src/legacyHelper.js` fixture demonstrates this deliberately.
+- **Monorepo/workspace-unaware**: a single scan is treated as one flat project. A file only imported from a sibling workspace package (`packages/*`) outside the scanned root will be misreported as an orphan — and, in `--graph` output, will simply be absent from the graph rather than shown as a connected node. Deferred to a later phase.
+- **CommonJS-only files** (`module.exports`/`require()`) show 0 imports/exports and contribute no graph edges — they'll typically surface as false-positive orphans even when actually used, and as disconnected nodes in `--graph` output. The `fixtures/basic-react-app/src/legacyHelper.js` fixture demonstrates this deliberately. Treating `require("./x")` calls as file-level edges (without full CommonJS export/symbol modeling) would be a cheap, worthwhile follow-up — deferred for now since no current fixture case exercises it.
 - **`tsconfig.json` `exports` field**: only the top-level `"."` entry is resolved; full conditional-exports maps are not.
+
+## Known Phase 2 limitations
+
+`--graph`'s symbol-usage resolution (`calls`/`renders` edges) is built on ts-morph's go-to-definition, which is real but not exhaustive static analysis. Known gaps, none of which produce a wrong edge — they simply produce no edge, which is the safe failure mode for a tool whose job is showing real relationships:
+
+- **Dynamic dispatch / reassigned function references** (`let f = a; if (x) f = b; f()`): resolves to the variable binding, not to `a` or `b`.
+- **Higher-order functions returning functions** (`const handler = makeHandler(); handler()`): resolves to the `handler` binding, not into `makeHandler`'s return statement.
+- **Method calls through interface-typed values**: resolve to the interface's method signature, not a concrete class implementation — the same ambiguity TypeScript's own go-to-definition has.
+- **Calls via `.bind()`/`.call()`/`.apply()`**, and calls through array/object literals of functions, are not walked.
+- **Namespace imports** (`import * as ns from "./x"`) aren't attributed to individual symbols in `imports`/`usages` — the file-level edge in `files` is still emitted, so connectivity isn't lost, only per-symbol attribution.
+- **Dotted/namespaced JSX tag names** (`<Foo.Bar />`) aren't resolved to a symbol.
 
 ## Project layout
 
-`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. This split is deliberate — a future `--json`-consuming web UI or Phase 2's graph explorer can call `orchestrator.runAnalysis()` directly without touching analysis code.
+`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. This split is deliberate — a future `--json`/`--graph`-consuming web UI (Phase 3's graph explorer) can call `orchestrator.runAnalysis()`/`runGraphAnalysis()` directly without touching analysis code.
 
 ## Testing
 
@@ -68,4 +82,4 @@ Orphan files        8
 npm test
 ```
 
-Runs `node:test` against `graph.ts`, `utils/format.ts`, and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points, a tsconfig path-alias import, and both a `memo`-wrapped and an anonymous-default-exported component.
+Runs `node:test` against `graph.ts`, `utils/format.ts`, `codeGraph.ts`, and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points, a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`).

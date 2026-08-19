@@ -1,4 +1,4 @@
-import { SourceFile, SyntaxKind } from "ts-morph";
+import { SourceFile, SyntaxKind, Node } from "ts-morph";
 import { FunctionCandidate } from "./analyzer";
 
 const COMPONENT_NAME_RE = /^[A-Z]/;
@@ -20,23 +20,27 @@ function hasJsx(candidate: FunctionCandidate): boolean {
  * functions. Known false negatives: React.memo(function foo(){}) with a
  * lowercase inner name, or components built via React.createElement without JSX.
  */
-export function countComponents(sourceFile: SourceFile, functionCandidates: FunctionCandidate[]): number {
-  let count = 0;
+export function getComponentNodes(sourceFile: SourceFile, functionCandidates: FunctionCandidate[]): Set<Node> {
+  const nodes = new Set<Node>();
 
   for (const candidate of functionCandidates) {
     if (candidate.node.getKind() === SyntaxKind.MethodDeclaration) continue; // class methods aren't components
     const nameOk = candidate.name === undefined || COMPONENT_NAME_RE.test(candidate.name);
     if (nameOk && hasJsx(candidate)) {
-      count++;
+      nodes.add(candidate.node);
     }
   }
 
   for (const cls of sourceFile.getClasses()) {
     const extendsExpr = cls.getExtends();
     if (extendsExpr && REACT_BASE_CLASS_RE.test(extendsExpr.getExpression().getText())) {
-      count++;
+      nodes.add(cls);
     }
   }
 
-  return count;
+  return nodes;
+}
+
+export function countComponents(sourceFile: SourceFile, functionCandidates: FunctionCandidate[]): number {
+  return getComponentNodes(sourceFile, functionCandidates).size;
 }

@@ -16,25 +16,35 @@ export function isInternalDependency(resolved: SourceFile | undefined, rootAbs: 
   return resolvedAbs === rootAbs || resolvedAbs.startsWith(rootAbs + path.sep);
 }
 
-/** Internal file-level dependency edges from both imports and re-export declarations. */
-export function getInternalDependencies(sourceFile: SourceFile, rootAbs: string): string[] {
-  const deps = new Set<string>();
+export interface DependencyEdge {
+  to: string;
+  kind: "import" | "reExport";
+}
+
+/** Internal file-level dependency edges from both imports and re-export declarations, kind-tagged. */
+export function getDependencyEdges(sourceFile: SourceFile, rootAbs: string): DependencyEdge[] {
+  const edges: DependencyEdge[] = [];
 
   for (const imp of sourceFile.getImportDeclarations()) {
     const resolved = imp.getModuleSpecifierSourceFile();
     if (isInternalDependency(resolved, rootAbs)) {
-      deps.add(resolved.getFilePath());
+      edges.push({ to: resolved.getFilePath(), kind: "import" });
     }
   }
 
   for (const exp of sourceFile.getExportDeclarations()) {
     const resolved = exp.getModuleSpecifierSourceFile();
     if (isInternalDependency(resolved, rootAbs)) {
-      deps.add(resolved.getFilePath());
+      edges.push({ to: resolved.getFilePath(), kind: "reExport" });
     }
   }
 
-  return Array.from(deps);
+  return edges;
+}
+
+/** Internal file-level dependency edges from both imports and re-export declarations. */
+export function getInternalDependencies(sourceFile: SourceFile, rootAbs: string): string[] {
+  return Array.from(new Set(getDependencyEdges(sourceFile, rootAbs).map((e) => e.to)));
 }
 
 export function countImports(sourceFile: SourceFile): number {
@@ -55,7 +65,7 @@ const HOC_WRAPPER_RE = /^(React\.)?(memo|forwardRef)$/;
  * does NOT generalize to arbitrary call expressions, or every array callback
  * assigned to a variable (`const x = arr.map(fn)`) would count as a function.
  */
-function unwrapKnownHocCalls(node: Node): Node {
+export function unwrapKnownHocCalls(node: Node): Node {
   let current: Node = node;
   for (let i = 0; i < 2; i++) {
     const call = current.getParentIfKind(SyntaxKind.CallExpression);
@@ -76,15 +86,34 @@ function unwrapKnownHocCalls(node: Node): Node {
  * deliberately excluded to avoid noise from every array callback.
  */
 function resolveBinding(node: Node): { include: boolean; name: string | undefined } {
+  const anchor = getBindingAnchor(node);
+  if (!anchor) return { include: false, name: undefined };
+  if (anchor.getKind() === SyntaxKind.VariableDeclaration) {
+    return { include: true, name: anchor.asKindOrThrow(SyntaxKind.VariableDeclaration).getName() };
+  }
+  return { include: true, name: undefined };
+}
+
+/**
+ * The VariableDeclaration or ExportAssignment a function-like node is bound to (through up to two
+ * layers of memo/forwardRef wrapping), if any. ts-morph's go-to-definition resolves references to
+ * this anchor node rather than to the function-like node itself — e.g. `getDefinitionNodes()` on a
+ * usage of `const Header = () => {}` returns the VariableDeclaration, not the ArrowFunction; a usage
+ * of an anonymously default-exported `export default () => {}` resolves (via the aliased symbol,
+ * since there's no direct definition for an anonymous declaration) to the ExportAssignment. Callers
+ * that need to match a resolved definition node back to a FunctionCandidate should key on this
+ * anchor node in addition to the candidate's own node.
+ */
+export function getBindingAnchor(node: Node): Node | undefined {
   const unwrapped = unwrapKnownHocCalls(node);
 
   const varDecl = unwrapped.getParentIfKind(SyntaxKind.VariableDeclaration);
-  if (varDecl) return { include: true, name: varDecl.getName() };
+  if (varDecl) return varDecl;
 
   const exportAssignment = unwrapped.getParentIfKind(SyntaxKind.ExportAssignment);
-  if (exportAssignment) return { include: true, name: undefined };
+  if (exportAssignment) return exportAssignment;
 
-  return { include: false, name: undefined };
+  return undefined;
 }
 
 /**

@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Command } from "commander";
-import { runAnalysis, CodeAtlasError } from "./orchestrator";
+import { runAnalysis, runGraphAnalysis, CodeAtlasError } from "./orchestrator";
 import { printReport, printJson } from "./report";
 
 function readOwnVersion(): string {
@@ -22,13 +22,15 @@ program
   .version(readOwnVersion())
   .argument("<path>", "path to the project to analyze")
   .option("--json", "print machine-readable JSON instead of the formatted report")
-  .action((targetPath: string, options: { json?: boolean }) => {
+  .option("--graph", "print the code graph (files/symbols/imports/call-and-render edges) as JSON")
+  .action((targetPath: string, options: { json?: boolean; graph?: boolean }) => {
     try {
-      const summary = runAnalysis(targetPath);
-      if (options.json) {
-        printJson(summary);
+      if (options.graph) {
+        printJson(runGraphAnalysis(targetPath));
+      } else if (options.json) {
+        printJson(runAnalysis(targetPath));
       } else {
-        printReport(summary);
+        printReport(runAnalysis(targetPath));
       }
     } catch (err) {
       if (err instanceof CodeAtlasError) {

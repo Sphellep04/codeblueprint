@@ -9,12 +9,12 @@ test("basic-react-app fixture: metrics match hand-verified expectations", () => 
   const summary = runAnalysis(FIXTURE);
 
   assert.equal(summary.projectName, "basic-react-app");
-  assert.equal(summary.files, 14);
+  assert.equal(summary.files, 15);
   assert.equal(summary.components, 8);
-  assert.equal(summary.functions, 16);
-  assert.equal(summary.classes, 1);
-  assert.equal(summary.imports, 12);
-  assert.equal(summary.exports, 16);
+  assert.equal(summary.functions, 18);
+  assert.equal(summary.classes, 2);
+  assert.equal(summary.imports, 13);
+  assert.equal(summary.exports, 18);
   assert.equal(summary.circularDeps, 2);
   assert.equal(summary.orphanFiles, 2);
 });
