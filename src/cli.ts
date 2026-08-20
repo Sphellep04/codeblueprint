@@ -2,8 +2,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Command, Option, InvalidArgumentError } from "commander";
-import { runAnalysis, runGraphAnalysis, CodeAtlasError } from "./orchestrator";
-import { printReport, printJson } from "./report";
+import { runAnalysis, runGraphAnalysis, runHotspotReport, CodeAtlasError } from "./orchestrator";
+import { printReport, printJson, printHotspotReport } from "./report";
 import { startServer, DEFAULT_PORT } from "./server";
 
 function parsePort(value: string): number {
@@ -32,9 +32,15 @@ program
   .argument("<path>", "path to the project to analyze")
   .option("--json", "print machine-readable JSON instead of the formatted report")
   .option("--graph", "print the code graph (files/symbols/imports/call-and-render edges) as JSON")
-  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph"]))
+  .addOption(
+    new Option("--hotspots", "print dependency hotspots, circular-dependency chains, and per-module coupling/complexity/dependencies").conflicts([
+      "graph",
+      "serve",
+    ])
+  )
+  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph", "hotspots"]))
   .addOption(new Option("--port <number>", `port for --serve (default ${DEFAULT_PORT})`).argParser(parsePort))
-  .action((targetPath: string, options: { json?: boolean; graph?: boolean; serve?: boolean; port?: number }) => {
+  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; serve?: boolean; port?: number }) => {
     if (options.port !== undefined && !options.serve) {
       program.error("error: --port can only be used together with --serve");
     }
@@ -43,6 +49,13 @@ program
         startServer(targetPath, options.port);
       } else if (options.graph) {
         printJson(runGraphAnalysis(targetPath));
+      } else if (options.hotspots) {
+        const report = runHotspotReport(targetPath);
+        if (options.json) {
+          printJson(report);
+        } else {
+          printHotspotReport(report);
+        }
       } else if (options.json) {
         printJson(runAnalysis(targetPath));
       } else {

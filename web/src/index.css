@@ -34,6 +34,33 @@ body {
   min-width: 220px;
 }
 
+.app-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+}
+
+.view-toggle button.active {
+  background: rgba(80, 140, 255, 0.25);
+}
+
 .app-body {
   flex: 1;
   display: flex;
@@ -113,6 +140,101 @@ body {
 
 .inspect-stats dd {
   margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hotspots-panel {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem 1.5rem;
+}
+
+.hotspots-panel section {
+  margin-bottom: 2rem;
+}
+
+.hotspots-panel h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.hotspots-empty {
+  color: rgba(128, 128, 128, 0.9);
+}
+
+.hotspots-list,
+.cycle-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 520px;
+}
+
+.hotspots-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.hotspots-count {
+  color: rgba(128, 128, 128, 0.9);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cycle-chain {
+  padding: 0.25rem 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9rem;
+}
+
+.module-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  max-width: 900px;
+}
+
+.module-card {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.module-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 40px;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  margin: 0.3rem 0;
+}
+
+.bar-label {
+  color: rgba(128, 128, 128, 0.9);
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.2);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: rgba(80, 140, 255, 0.75);
+}
+
+.bar-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

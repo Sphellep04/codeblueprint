@@ -9,6 +9,7 @@ export interface FileModel {
   functionCount: number;
   classCount: number;
   componentCount: number;
+  complexityTotal: number;
   internalDependencies: string[];
   isEntryPoint: boolean;
 }
@@ -26,4 +27,29 @@ export interface ExplorerData {
   projectName: string;
   files: FileModel[];
   edges: FileEdge[];
+}
+
+export interface FileHotspot {
+  filePath: string;
+  dependents: number;
+}
+
+export interface CyclePath {
+  files: string[];
+}
+
+export interface ModuleMetrics {
+  name: string;
+  fileCount: number;
+  dependencyCount: number;
+  coupling: number;
+  complexityAverage: number;
+}
+
+export interface HotspotReport {
+  rootDir: string;
+  projectName: string;
+  hotspots: FileHotspot[];
+  cycles: CyclePath[];
+  modules: ModuleMetrics[];
 }

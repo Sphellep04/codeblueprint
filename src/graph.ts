@@ -89,3 +89,31 @@ export function findCycles(graph: DependencyGraph): string[][] {
     (scc) => scc.length > 1 || (scc.length === 1 && (graph.edges.get(scc[0])?.has(scc[0]) ?? false))
   );
 }
+
+/**
+ * Reconstructs one genuine edge-connected cyclic path through an SCC's member set (from
+ * findCycles), e.g. ["a", "b", "c"] meaning a -> b -> c -> a. Walks forward via DFS until it hits
+ * a node already on the current path (a back-edge), which closes the cycle — O(V+E) within the
+ * member subgraph. Doesn't attempt to visit every member (a Hamiltonian cycle through an arbitrary
+ * SCC is unnecessary here and NP-hard in general); a simple forward walk always finds *a* real
+ * cycle, since every node in a genuine SCC has at least one outgoing edge back into the SCC.
+ */
+export function findCyclePath(members: string[], graph: DependencyGraph): string[] {
+  if (members.length <= 1) return members;
+
+  const memberSet = new Set(members);
+  const path: string[] = [members[0]];
+  const indexOnPath = new Map<string, number>([[members[0], 0]]);
+  let current = members[0];
+
+  while (true) {
+    const neighbors = Array.from(graph.edges.get(current) ?? []).filter((n) => memberSet.has(n));
+    const backEdge = neighbors.find((n) => indexOnPath.has(n));
+    if (backEdge !== undefined) return path.slice(indexOnPath.get(backEdge)!);
+
+    const next = neighbors.find((n) => !indexOnPath.has(n))!;
+    path.push(next);
+    indexOnPath.set(next, path.length - 1);
+    current = next;
+  }
+}

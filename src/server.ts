@@ -2,7 +2,7 @@ import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import { exec } from "child_process";
-import { runExplorerData } from "./orchestrator";
+import { runExplorerData, runHotspotReport } from "./orchestrator";
 
 export const DEFAULT_PORT = 4787;
 
@@ -87,8 +87,8 @@ function serveStatic(uiDir: string | undefined, urlPath: string, res: http.Serve
  * auto-detected build output; tests pass an explicit directory to serve fixture assets instead.
  */
 export function createServer(rootDir: string, uiDir: string | undefined = resolveUiDir()): http.Server {
-  const data = runExplorerData(rootDir);
-  const explorerDataJson = JSON.stringify(data);
+  const explorerDataJson = JSON.stringify(runExplorerData(rootDir));
+  const hotspotReportJson = JSON.stringify(runHotspotReport(rootDir));
 
   return http.createServer((req, res) => {
     if (req.method !== "GET") {
@@ -100,6 +100,12 @@ export function createServer(rootDir: string, uiDir: string | undefined = resolv
     if (req.url === "/api/explorer-data") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(explorerDataJson);
+      return;
+    }
+
+    if (req.url === "/api/hotspots") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(hotspotReportJson);
       return;
     }
 

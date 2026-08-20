@@ -36,6 +36,8 @@ export default function InspectPanel({ file, edges, rootDir }: InspectPanelProps
         <dd>{file.classCount}</dd>
         <dt>Components</dt>
         <dd>{file.componentCount}</dd>
+        <dt>Complexity</dt>
+        <dd>{file.complexityTotal}</dd>
         <dt>Incoming edges</dt>
         <dd>{incoming}</dd>
         <dt>Outgoing edges</dt>

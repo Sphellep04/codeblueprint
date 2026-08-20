@@ -5,6 +5,8 @@ export interface FileModel {
   functionCount: number;
   classCount: number;
   componentCount: number;
+  /** Sum of McCabe cyclomatic complexity across every function/method in this file. */
+  complexityTotal: number;
   /** Absolute paths of internal (non-node_modules) files this file depends on. */
   internalDependencies: string[];
   isEntryPoint: boolean;
@@ -29,6 +31,8 @@ export interface Summary {
   classes: number;
   imports: number;
   exports: number;
+  /** Sum of every file's complexityTotal. Not printed by report.ts's plain-text output today — see --hotspots. */
+  complexity: number;
   circularDeps: number;
   orphanFiles: number;
   /** Retained for a future --json/--verbose mode; not printed by report.ts today. */
@@ -88,4 +92,35 @@ export interface ExplorerData {
   projectName: string;
   files: FileModel[];
   edges: FileEdge[];
+}
+
+export interface FileHotspot {
+  filePath: string;
+  /** How many other files import this one — in-degree in the file dependency graph. */
+  dependents: number;
+}
+
+/** An edge-ordered walk through one circular-dependency cluster: files[0] -> files[1] -> ... -> files[0]. */
+export interface CyclePath {
+  files: string[];
+}
+
+/**
+ * Raw (not display-normalized) coupling/complexity/dependency numbers for one module — see
+ * src/modules.ts for how these are computed and why each formula was chosen.
+ */
+export interface ModuleMetrics {
+  name: string;
+  fileCount: number;
+  dependencyCount: number;
+  coupling: number;
+  complexityAverage: number;
+}
+
+export interface HotspotReport {
+  rootDir: string;
+  projectName: string;
+  hotspots: FileHotspot[];
+  cycles: CyclePath[];
+  modules: ModuleMetrics[];
 }

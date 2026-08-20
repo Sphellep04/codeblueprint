@@ -9,12 +9,14 @@ import {
   countClasses,
   getFunctionCandidates,
   getInternalDependencies,
+  getCyclomaticComplexity,
 } from "./analyzer";
 import { countComponents } from "./componentHeuristics";
-import { buildGraph, inDegrees, findCycles } from "./graph";
+import { buildGraph, inDegrees, findCycles, findCyclePath } from "./graph";
 import { computeEntryPoints } from "./entrypoints";
 import { buildCodeGraph, buildFileEdges } from "./codeGraph";
-import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData } from "./model";
+import { buildModuleMetrics } from "./modules";
+import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport } from "./model";
 import { SourceFile } from "ts-morph";
 
 export class CodeAtlasError extends Error {}
@@ -65,6 +67,7 @@ function buildFileModels(rootAbs: string, sourceFiles: SourceFile[]): FileModel[
       functionCount: functionCandidates.length,
       classCount: countClasses(sf),
       componentCount: countComponents(sf, functionCandidates),
+      complexityTotal: functionCandidates.reduce((sum, c) => sum + getCyclomaticComplexity(c.node), 0),
       internalDependencies: getInternalDependencies(sf, rootAbs),
       isEntryPoint: entryPoints.has(sf.getFilePath()),
     };
@@ -101,6 +104,7 @@ export function summarize(model: ProjectModel): Summary {
     classes: sum(model.files, (f) => f.classCount),
     imports: sum(model.files, (f) => f.importCount),
     exports: sum(model.files, (f) => f.exportCount),
+    complexity: sum(model.files, (f) => f.complexityTotal),
     circularDeps: cycles.length,
     orphanFiles: orphanFilePaths.length,
     cycles,
@@ -129,5 +133,36 @@ export function runExplorerData(rootDir: string): ExplorerData {
     projectName: resolveProjectName(rootAbs),
     files: buildFileModels(rootAbs, sourceFiles),
     edges: buildFileEdges(sourceFiles, rootAbs),
+  };
+}
+
+const TOP_HOTSPOTS = 10;
+
+export function runHotspotReport(rootDir: string): HotspotReport {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
+  const files = buildFileModels(rootAbs, sourceFiles);
+  const edges = buildFileEdges(sourceFiles, rootAbs);
+
+  const edgesByNode = new Map<string, string[]>(files.map((f) => [f.absolutePath, f.internalDependencies]));
+  const graph = buildGraph(
+    files.map((f) => f.absolutePath),
+    edgesByNode
+  );
+  const degrees = inDegrees(graph);
+
+  const hotspots = files
+    .map((f) => ({ filePath: f.absolutePath, dependents: degrees.get(f.absolutePath) ?? 0 }))
+    .filter((h) => h.dependents > 0)
+    .sort((a, b) => b.dependents - a.dependents || a.filePath.localeCompare(b.filePath))
+    .slice(0, TOP_HOTSPOTS);
+
+  const cycles = findCycles(graph).map((members) => ({ files: findCyclePath(members, graph) }));
+
+  return {
+    rootDir: rootAbs,
+    projectName: resolveProjectName(rootAbs),
+    hotspots,
+    cycles,
+    modules: buildModuleMetrics(files, edges, rootAbs),
   };
 }

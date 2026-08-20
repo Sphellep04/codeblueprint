@@ -159,3 +159,59 @@ export function countFunctions(sourceFile: SourceFile): number {
 export function countClasses(sourceFile: SourceFile): number {
   return sourceFile.getClasses().length;
 }
+
+const COMPLEXITY_BOUNDARY_KINDS = new Set([
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.FunctionExpression,
+  SyntaxKind.ArrowFunction,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+  SyntaxKind.Constructor,
+]);
+
+const COMPLEXITY_DECISION_KINDS = new Set([
+  SyntaxKind.IfStatement,
+  SyntaxKind.ForStatement,
+  SyntaxKind.ForInStatement,
+  SyntaxKind.ForOfStatement,
+  SyntaxKind.WhileStatement,
+  SyntaxKind.DoStatement,
+  SyntaxKind.CaseClause,
+  SyntaxKind.CatchClause,
+  SyntaxKind.ConditionalExpression,
+]);
+
+/**
+ * McCabe cyclomatic complexity for one function-like node: 1 + decision points in its own body.
+ * Decision points inside a nested function/method/accessor/constructor are NOT counted here — that
+ * nested scope has its own complexity, computed separately when it's itself a FunctionCandidate;
+ * an inline callback with no such binding (already excluded from getFunctionCandidates) simply
+ * doesn't contribute anywhere, consistent with that existing exclusion.
+ */
+export function getCyclomaticComplexity(node: Node): number {
+  let complexity = 1;
+
+  node.forEachDescendant((descendant, traversal) => {
+    const kind = descendant.getKind();
+
+    if (COMPLEXITY_BOUNDARY_KINDS.has(kind)) {
+      traversal.skip();
+      return;
+    }
+
+    if (COMPLEXITY_DECISION_KINDS.has(kind)) {
+      complexity++;
+      return;
+    }
+
+    if (kind === SyntaxKind.BinaryExpression) {
+      const operator = descendant.asKindOrThrow(SyntaxKind.BinaryExpression).getOperatorToken().getKind();
+      if (operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.BarBarToken) {
+        complexity++;
+      }
+    }
+  });
+
+  return complexity;
+}

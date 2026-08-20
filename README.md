@@ -8,6 +8,7 @@ Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structu
 codeatlas <path>
 codeatlas <path> --json
 codeatlas <path> --graph
+codeatlas <path> --hotspots [--json]
 codeatlas <path> --serve [--port <number>]
 codeatlas --version
 ```
@@ -47,6 +48,34 @@ Orphan files        8
 
 `--graph` prints a `CodeGraph` object instead: file-level import/re-export edges, every function/method/class/component declaration as a `SymbolModel`, which files import which specific symbols, and symbol-to-symbol `calls`/`renders` usage edges (e.g. `authService.ts#login` calls `db.ts#query`, `App.tsx#App` renders `Header.tsx#Header`). It's a separate flag from `--json` (not merged into `Summary`) so existing `--json` scripting consumers don't see their payload shape change, and so the extra language-service work it does is only paid when actually asked for. See "Known Phase 2 limitations" below for what it deliberately doesn't resolve.
 
+## Architecture intelligence (`--hotspots`)
+
+```
+codeatlas ./my-project --hotspots
+codeatlas ./my-project --hotspots --json
+```
+
+Prints (or, with `--json`, returns as a `HotspotReport` object) three things `--graph`'s raw edge
+data doesn't surface on its own:
+
+- **Most connected files** — the top 10 files by in-degree (`dependents`: how many other files
+  import each one), reusing `graph.ts`'s existing `inDegrees` rather than a new computation.
+- **Circular dependencies as an actual chain** — `src/a.ts → src/b.ts → src/a.ts`, not just the
+  unordered file list `Summary.cycles` already reports. `graph.ts`'s `findCyclePath` walks a real
+  edge-connected path through each cycle's member set.
+- **Per-module Coupling / Complexity / Dependencies bars** — a "module" is the top-level directory
+  under the project root (or under `src/`, if one exists; see `src/modules.ts`'s `moduleNameForFile`
+  for the exact rule, including how root-level files are bucketed). Complexity is real McCabe
+  cyclomatic complexity per function (`analyzer.ts`'s `getCyclomaticComplexity`, counting
+  `if`/`for`/`while`/`case`/`catch`/ternary/`&&`/`||`), averaged per file across the module.
+  Coupling is afferent + efferent cross-module file-level edges (Ca + Ce). Dependencies is the
+  summed `importCount` of the module's files. All three are raw numbers in `ModuleMetrics` —
+  `report.ts` and the Explorer's Hotspots panel each independently normalize them into bars for
+  display, consistent with how every other report in this codebase keeps `model.ts` as plain data.
+
+`--hotspots` composes with `--json` as a pure format toggle (same as the base command's `--json`
+already does for `Summary`), and is mutually exclusive with `--graph`/`--serve` (different modes).
+
 ## Explorer (`--serve`)
 
 ```
@@ -54,7 +83,7 @@ codeatlas ./my-project --serve
 codeatlas ./my-project --serve --port 5000
 ```
 
-Starts a local HTTP server (default port `4787`) and opens your browser to a graphical Explorer: a file-tree sidebar, a pan/zoom/click dependency graph (Cytoscape.js), a search box that highlights matching files and fades the rest, and an inspect panel showing the selected file's metrics (imports/exports/functions/classes/components, entry-point status, incoming/outgoing edge counts). Unlike `--json`/`--graph`, `--serve` doesn't print anything machine-readable to stdout — it's meant to be looked at, not piped — so it's mutually exclusive with `--json`/`--graph` (combining them is a usage error, not a silently-ignored combination).
+Starts a local HTTP server (default port `4787`) and opens your browser to a graphical Explorer: a file-tree sidebar, a pan/zoom/click dependency graph (Cytoscape.js), a search box that highlights matching files and fades the rest, and an inspect panel showing the selected file's metrics (imports/exports/functions/classes/components/complexity, entry-point status, incoming/outgoing edge counts). A Graph/Hotspots toggle in the header switches to a second view — the same data `--hotspots` prints as text, rendered as a connected-files list, cycle chains, and per-module coupling/complexity/dependency bars (`web/src/components/HotspotsPanel.tsx`), served from a second `GET /api/hotspots` endpoint computed once at server startup alongside `/api/explorer-data`. Unlike `--json`/`--graph`/`--hotspots`, `--serve` doesn't print anything machine-readable to stdout — it's meant to be looked at, not piped — so it's mutually exclusive with the other three (combining them is a usage error, not a silently-ignored combination).
 
 The Explorer's node set includes every scanned file, including orphans with zero edges — deliberately different from `CodeGraph.files`' edges-only shape (`--graph`), since a graph UI needs every file to draw as a node, not just the ones with a visible edge. This is `ExplorerData` (see `src/model.ts`): `ProjectModel.files` for the complete file list plus `codeGraph.ts`'s file-level edges, assembled by `orchestrator.runExplorerData()` in a single project parse.
 
@@ -98,7 +127,7 @@ The Explorer's node set includes every scanned file, including orphans with zero
 
 ## Project layout
 
-`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. This split is deliberate — `orchestrator.ts`'s three entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`) are the only things any consumer (CLI, server, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
+`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). This split is deliberate — `orchestrator.ts`'s four entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`) are the only things any consumer (CLI, server, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
 
 ## Testing
 
@@ -106,6 +135,6 @@ The Explorer's node set includes every scanned file, including orphans with zero
 npm test
 ```
 
-Runs `node:test` against `graph.ts`, `utils/format.ts`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points, a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`). `npm test` never requires `web/` to be built first.
+Runs `node:test` against `graph.ts` (including `findCyclePath`), `analyzer.ts`'s `getCyclomaticComplexity`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points, a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`). `npm test` never requires `web/` to be built first.
 
 The Explorer frontend (`web/`) has no automated tests — the project has no UI-render test infrastructure prior to this, and the fixture's known cycles/orphan/entry-points make it a good manual test bed. Verify frontend changes by running `codeatlas ./fixtures/basic-react-app --serve` and checking the result in a browser, not just `tsc`/`vite build` succeeding.

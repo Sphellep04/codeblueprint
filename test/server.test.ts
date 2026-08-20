@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import type { AddressInfo } from "net";
 import { createServer } from "../src/server";
-import { ExplorerData } from "../src/model";
+import { ExplorerData, HotspotReport } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
 
@@ -31,6 +31,20 @@ test("GET /api/explorer-data returns the ExplorerData shape for the fixture", as
     assert.equal(data.files.length, 15);
     assert.ok(Array.isArray(data.edges));
     assert.ok(data.edges.length > 0);
+  });
+});
+
+test("GET /api/hotspots returns the HotspotReport shape for the fixture", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/hotspots`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "application/json");
+
+    const data = (await res.json()) as HotspotReport;
+    assert.equal(data.projectName, "basic-react-app");
+    assert.ok(data.hotspots.length > 0);
+    assert.equal(data.cycles.length, 2);
+    assert.ok(data.modules.length > 0);
   });
 });
 
