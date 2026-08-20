@@ -10,8 +10,12 @@
   "files": [
     "dist"
   ],
+  "workspaces": [
+    "web"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:web && node scripts/copy-ui.js",
+    "build:web": "npm run build --workspace=web",
     "dev": "ts-node src/cli.ts",
     "start": "node dist/cli.js",
     "test": "node --require ts-node/register --test test/*.test.ts"

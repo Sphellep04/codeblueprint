@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
+import { Project } from "ts-morph";
 import { runGraphAnalysis } from "../src/orchestrator";
+import { buildFileEdges } from "../src/codeGraph";
 import { CodeGraph } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
@@ -32,6 +36,25 @@ test("buildFileEdges: import vs re-export are kind-tagged correctly", () => {
   const appToHeader = g.files.find((e) => basename(e.from) === "App.tsx" && basename(e.to) === "Header.tsx");
   assert.equal(bToA?.kind, "reExport");
   assert.equal(appToHeader?.kind, "import");
+});
+
+test("buildFileEdges: drops an edge whose target isn't in the given sourceFiles list", () => {
+  // isInternalDependency only checks that a resolved import target is within rootAbs — it doesn't
+  // know about files scanner.ts excludes afterward (e.g. gitignored files that are still resolvable
+  // via TS module resolution because they exist on disk). buildFileEdges must not emit an edge to
+  // such a file, since every consumer (the Explorer's Cytoscape graph, notably) assumes every
+  // edge's "to" is one of the nodes it already has — Cytoscape throws synchronously otherwise.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-dangling-edge-"));
+  const rootAbs = path.resolve(dir);
+  fs.writeFileSync(path.join(dir, "a.ts"), `import { b } from "./b";\nb();\n`);
+  fs.writeFileSync(path.join(dir, "b.ts"), `export function b() {}\n`);
+
+  const project = new Project();
+  const aFile = project.addSourceFileAtPath(path.join(dir, "a.ts"));
+  project.addSourceFileAtPath(path.join(dir, "b.ts")); // resolvable, but deliberately not "known"
+
+  const edges = buildFileEdges([aFile], rootAbs);
+  assert.deepEqual(edges, []);
 });
 
 test("buildSymbolTable: Header is an exported component symbol", () => {

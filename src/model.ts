@@ -78,3 +78,14 @@ export interface CodeGraph {
   imports: ImportEdge[];
   usages: SymbolUsageEdge[];
 }
+
+/**
+ * File-level data for the --serve Explorer UI: every scanned file (including orphans, which have
+ * zero edges and so never appear in CodeGraph.files) plus the import/re-export edges between them.
+ */
+export interface ExplorerData {
+  rootDir: string;
+  projectName: string;
+  files: FileModel[];
+  edges: FileEdge[];
+}

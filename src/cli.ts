@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 import * as fs from "fs";
 import * as path from "path";
-import { Command } from "commander";
+import { Command, Option, InvalidArgumentError } from "commander";
 import { runAnalysis, runGraphAnalysis, CodeAtlasError } from "./orchestrator";
 import { printReport, printJson } from "./report";
+import { startServer, DEFAULT_PORT } from "./server";
+
+function parsePort(value: string): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new InvalidArgumentError(`"${value}" is not a valid port number.`);
+  }
+  return port;
+}
 
 function readOwnVersion(): string {
   try {
@@ -23,9 +32,16 @@ program
   .argument("<path>", "path to the project to analyze")
   .option("--json", "print machine-readable JSON instead of the formatted report")
   .option("--graph", "print the code graph (files/symbols/imports/call-and-render edges) as JSON")
-  .action((targetPath: string, options: { json?: boolean; graph?: boolean }) => {
+  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph"]))
+  .addOption(new Option("--port <number>", `port for --serve (default ${DEFAULT_PORT})`).argParser(parsePort))
+  .action((targetPath: string, options: { json?: boolean; graph?: boolean; serve?: boolean; port?: number }) => {
+    if (options.port !== undefined && !options.serve) {
+      program.error("error: --port can only be used together with --serve");
+    }
     try {
-      if (options.graph) {
+      if (options.serve) {
+        startServer(targetPath, options.port);
+      } else if (options.graph) {
         printJson(runGraphAnalysis(targetPath));
       } else if (options.json) {
         printJson(runAnalysis(targetPath));

@@ -13,8 +13,8 @@ import {
 import { countComponents } from "./componentHeuristics";
 import { buildGraph, inDegrees, findCycles } from "./graph";
 import { computeEntryPoints } from "./entrypoints";
-import { buildCodeGraph } from "./codeGraph";
-import { FileModel, ProjectModel, Summary, CodeGraph } from "./model";
+import { buildCodeGraph, buildFileEdges } from "./codeGraph";
+import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData } from "./model";
 import { SourceFile } from "ts-morph";
 
 export class CodeAtlasError extends Error {}
@@ -52,13 +52,11 @@ function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFil
   return { rootAbs, sourceFiles };
 }
 
-export function buildProjectModel(rootDir: string): ProjectModel {
-  const { rootAbs, sourceFiles } = loadProject(rootDir);
-
+function buildFileModels(rootAbs: string, sourceFiles: SourceFile[]): FileModel[] {
   const filePaths = sourceFiles.map((sf) => sf.getFilePath());
   const entryPoints = computeEntryPoints(rootAbs, filePaths);
 
-  const files: FileModel[] = sourceFiles.map((sf) => {
+  return sourceFiles.map((sf) => {
     const functionCandidates = getFunctionCandidates(sf);
     return {
       absolutePath: sf.getFilePath(),
@@ -71,11 +69,15 @@ export function buildProjectModel(rootDir: string): ProjectModel {
       isEntryPoint: entryPoints.has(sf.getFilePath()),
     };
   });
+}
+
+export function buildProjectModel(rootDir: string): ProjectModel {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
 
   return {
     rootDir: rootAbs,
     projectName: resolveProjectName(rootAbs),
-    files,
+    files: buildFileModels(rootAbs, sourceFiles),
   };
 }
 
@@ -118,4 +120,14 @@ export function runAnalysis(rootDir: string): Summary {
 export function runGraphAnalysis(rootDir: string): CodeGraph {
   const { rootAbs, sourceFiles } = loadProject(rootDir);
   return buildCodeGraph(sourceFiles, rootAbs);
+}
+
+export function runExplorerData(rootDir: string): ExplorerData {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
+  return {
+    rootDir: rootAbs,
+    projectName: resolveProjectName(rootAbs),
+    files: buildFileModels(rootAbs, sourceFiles),
+    edges: buildFileEdges(sourceFiles, rootAbs),
+  };
 }
