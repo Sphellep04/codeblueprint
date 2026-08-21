@@ -53,3 +53,11 @@ export interface HotspotReport {
   cycles: CyclePath[];
   modules: ModuleMetrics[];
 }
+
+export interface ImpactReport {
+  rootDir: string;
+  projectName: string;
+  targetFile: string;
+  impactedFiles: string[];
+  impactedRoutes: string[];
+}

@@ -69,3 +69,21 @@ test("buildModuleMetrics: coupling, dependencies, and average complexity are com
   assert.equal(shared.complexityAverage, 10);
   assert.equal(shared.coupling, 3); // Ca=2 (a->c, b->c) + Ce=1 (c->a)
 });
+
+test("buildModuleMetrics: an import and a re-export between the same two files counts as one coupling relationship, not two", () => {
+  const a = path.join(ROOT, "src", "billing", "a.ts");
+  const c = path.join(ROOT, "src", "shared", "c.ts");
+
+  const files: FileModel[] = [file(a), file(c)];
+  const edges: FileEdge[] = [
+    { kind: "import", from: a, to: c },
+    { kind: "reExport", from: a, to: c }, // same file pair, different edge kind — one real relationship
+  ];
+
+  const modules = buildModuleMetrics(files, edges, ROOT);
+  const billing = modules.find((m) => m.name === "billing")!;
+  const shared = modules.find((m) => m.name === "shared")!;
+
+  assert.equal(billing.coupling, 1); // Ce=1, not 2
+  assert.equal(shared.coupling, 1); // Ca=1, not 2
+});

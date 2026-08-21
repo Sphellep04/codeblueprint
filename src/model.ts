@@ -124,3 +124,13 @@ export interface HotspotReport {
   cycles: CyclePath[];
   modules: ModuleMetrics[];
 }
+
+export interface ImpactReport {
+  rootDir: string;
+  projectName: string;
+  targetFile: string;
+  /** Full transitive closure of dependents, NOT including targetFile itself. */
+  impactedFiles: string[];
+  /** Subset of impactedFiles that are routes — see entrypoints.ts's computeRoutes. */
+  impactedRoutes: string[];
+}

@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import type { AddressInfo } from "net";
 import { createServer } from "../src/server";
-import { ExplorerData, HotspotReport } from "../src/model";
+import { ExplorerData, HotspotReport, ImpactReport } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
 
@@ -45,6 +45,49 @@ test("GET /api/hotspots returns the HotspotReport shape for the fixture", async 
     assert.ok(data.hotspots.length > 0);
     assert.equal(data.cycles.length, 2);
     assert.ok(data.modules.length > 0);
+  });
+});
+
+test("GET /api/impact?file=<known file> returns the ImpactReport shape", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const target = path.join(FIXTURE, "src", "utils", "helpers.ts").replace(/\\/g, "/");
+    const res = await fetch(`${baseUrl}/api/impact?file=${encodeURIComponent(target)}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "application/json");
+
+    const data = (await res.json()) as ImpactReport;
+    assert.equal(data.targetFile, target);
+    assert.equal(data.impactedFiles.length, 4);
+    assert.equal(data.impactedRoutes.length, 1);
+  });
+});
+
+test("GET /api/impact-summary (a look-alike path) is not swallowed by the /api/impact handler", async () => {
+  // /api/impact must match exactly (or with a "?" query boundary) — a prefix match here would
+  // incorrectly claim any future/typo'd path that merely starts with "/api/impact".
+  const missingUiDir = path.join(os.tmpdir(), "codeatlas-no-such-ui-dir-" + Date.now());
+  await withServer(missingUiDir, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/impact-summary`);
+    assert.notEqual(res.status, 400); // the impact handler's "missing file param" response
+    const body = await res.text();
+    assert.doesNotMatch(body, /Missing required 'file' query parameter/);
+  });
+});
+
+test("GET /api/impact with no 'file' query param responds 400", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/impact`);
+    assert.equal(res.status, 400);
+  });
+});
+
+test("GET /api/impact?file=<unknown file> responds 404, and the server stays responsive afterward", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/impact?file=${encodeURIComponent("/does/not/exist.ts")}`);
+    assert.equal(res.status, 404);
+
+    const stillAlive = await fetch(`${baseUrl}/api/explorer-data`);
+    assert.equal(stillAlive.status, 200);
   });
 });
 

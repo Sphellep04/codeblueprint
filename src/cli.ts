@@ -2,8 +2,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Command, Option, InvalidArgumentError } from "commander";
-import { runAnalysis, runGraphAnalysis, runHotspotReport, CodeAtlasError } from "./orchestrator";
-import { printReport, printJson, printHotspotReport } from "./report";
+import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, CodeAtlasError } from "./orchestrator";
+import { printReport, printJson, printHotspotReport, printImpactReport } from "./report";
 import { startServer, DEFAULT_PORT } from "./server";
 
 function parsePort(value: string): number {
@@ -36,11 +36,19 @@ program
     new Option("--hotspots", "print dependency hotspots, circular-dependency chains, and per-module coupling/complexity/dependencies").conflicts([
       "graph",
       "serve",
+      "impact",
     ])
   )
-  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph", "hotspots"]))
+  .addOption(
+    new Option("--impact <file>", "print the full transitive impact of changing a file (reverse-dependency closure)").conflicts([
+      "graph",
+      "serve",
+      "hotspots",
+    ])
+  )
+  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph", "hotspots", "impact"]))
   .addOption(new Option("--port <number>", `port for --serve (default ${DEFAULT_PORT})`).argParser(parsePort))
-  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; serve?: boolean; port?: number }) => {
+  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; impact?: string; serve?: boolean; port?: number }) => {
     if (options.port !== undefined && !options.serve) {
       program.error("error: --port can only be used together with --serve");
     }
@@ -55,6 +63,13 @@ program
           printJson(report);
         } else {
           printHotspotReport(report);
+        }
+      } else if (options.impact !== undefined) {
+        const report = runImpactAnalysis(targetPath, options.impact);
+        if (options.json) {
+          printJson(report);
+        } else {
+          printImpactReport(report);
         }
       } else if (options.json) {
         printJson(runAnalysis(targetPath));

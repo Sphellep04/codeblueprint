@@ -87,6 +87,27 @@ function resolvePackageJsonEntryPoints(rootAbs: string): Set<string> {
   return entries;
 }
 
+/** True for Next.js `pages/**` files and `app/**` files matching APP_ROUTER_FILES — the files a
+ * developer actually ships as application routes, as distinct from test/config files and
+ * package.json entries, which are also entry points (see computeEntryPoints) but not routes. */
+function isRouteFile(rootAbs: string, filePath: string): boolean {
+  const rel = toPosix(path.relative(rootAbs, filePath));
+  const basename = path.basename(filePath);
+
+  if (rel.startsWith("pages/") || rel.includes("/pages/")) return true;
+  if ((rel.startsWith("app/") || rel.includes("/app/")) && APP_ROUTER_FILES.has(basename)) return true;
+  return false;
+}
+
+/** Subset of computeEntryPoints' result that's genuinely a route — see isRouteFile. */
+export function computeRoutes(rootAbs: string, filePaths: string[]): Set<string> {
+  const routes = new Set<string>();
+  for (const filePath of filePaths) {
+    if (isRouteFile(rootAbs, filePath)) routes.add(filePath);
+  }
+  return routes;
+}
+
 /**
  * Determines whether an absolute file path should be treated as an entry point
  * (never flagged as orphaned) even with zero internal importers.
@@ -105,12 +126,7 @@ export function computeEntryPoints(rootAbs: string, filePaths: string[]): Set<st
     const rel = toPosix(path.relative(rootAbs, filePath));
     const basename = path.basename(filePath);
 
-    if (rel.startsWith("pages/") || rel.includes("/pages/")) {
-      entries.add(filePath);
-      continue;
-    }
-
-    if ((rel.startsWith("app/") || rel.includes("/app/")) && APP_ROUTER_FILES.has(basename)) {
+    if (isRouteFile(rootAbs, filePath)) {
       entries.add(filePath);
       continue;
     }

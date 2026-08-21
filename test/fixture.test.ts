@@ -13,7 +13,7 @@ test("basic-react-app fixture: metrics match hand-verified expectations", () => 
   assert.equal(summary.components, 8);
   assert.equal(summary.functions, 18);
   assert.equal(summary.classes, 2);
-  assert.equal(summary.imports, 13);
+  assert.equal(summary.imports, 14);
   assert.equal(summary.exports, 18);
   assert.equal(summary.circularDeps, 2);
   assert.equal(summary.orphanFiles, 2);

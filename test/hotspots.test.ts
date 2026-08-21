@@ -34,11 +34,11 @@ test("runHotspotReport: modules match the fixture's known directory layout", () 
   });
 });
 
-test("runHotspotReport: Header.tsx and helpers.ts are tied at the top with 2 dependents each", () => {
+test("runHotspotReport: helpers.ts is the top hotspot (App.tsx, Header.tsx, and pages/about.tsx all import it)", () => {
   const top = report().hotspots.filter((h) => h.dependents === Math.max(...report().hotspots.map((x) => x.dependents)));
   const topBasenames = top.map((h) => basename(h.filePath)).sort();
-  assert.deepEqual(topBasenames, ["Header.tsx", "helpers.ts"]);
-  assert.equal(top[0].dependents, 2);
+  assert.deepEqual(topBasenames, ["helpers.ts"]);
+  assert.equal(top[0].dependents, 3);
 });
 
 test("runHotspotReport: files with zero dependents (orphans, leaves) are excluded from hotspots", () => {

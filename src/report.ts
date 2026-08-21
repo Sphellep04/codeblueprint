@@ -1,4 +1,4 @@
-import { Summary, HotspotReport } from "./model";
+import { Summary, HotspotReport, ImpactReport } from "./model";
 import { formatRows, formatBar, Row } from "./utils/format";
 
 /**
@@ -88,4 +88,34 @@ export function formatHotspotReport(report: HotspotReport): string {
 
 export function printHotspotReport(report: HotspotReport): void {
   process.stdout.write(formatHotspotReport(report) + "\n");
+}
+
+export function formatImpactReport(report: ImpactReport): string {
+  const target = relativeToRoot(report.targetFile, report.rootDir);
+  const fileCount = report.impactedFiles.length;
+  const routeCount = report.impactedRoutes.length;
+
+  const lines: string[] = [
+    "CodeAtlas — Impact Analysis",
+    "",
+    `Project: ${report.projectName}`,
+    `Target: ${target}`,
+    "",
+    `Potential impact: ${fileCount} file${fileCount === 1 ? "" : "s"}`,
+  ];
+
+  if (fileCount === 0) {
+    lines.push("  (no files depend on this one)");
+  } else {
+    for (const f of report.impactedFiles) lines.push("  " + relativeToRoot(f, report.rootDir));
+  }
+
+  lines.push("", `${routeCount} route${routeCount === 1 ? "" : "s"} may be affected`);
+  for (const r of report.impactedRoutes) lines.push("  " + relativeToRoot(r, report.rootDir));
+
+  return lines.join("\n");
+}
+
+export function printImpactReport(report: ImpactReport): void {
+  process.stdout.write(formatImpactReport(report) + "\n");
 }

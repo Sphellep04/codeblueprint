@@ -1,13 +1,15 @@
-import type { FileEdge, FileModel } from "../types";
+import type { FileEdge, FileModel, ImpactReport } from "../types";
 import { relativePath } from "../lib/paths";
 
 interface InspectPanelProps {
   file: FileModel | undefined;
   edges: FileEdge[];
   rootDir: string;
+  impact: ImpactReport | null;
+  onShowImpact: (filePath: string) => void;
 }
 
-export default function InspectPanel({ file, edges, rootDir }: InspectPanelProps) {
+export default function InspectPanel({ file, edges, rootDir, impact, onShowImpact }: InspectPanelProps) {
   if (!file) {
     return (
       <aside className="inspect-panel">
@@ -18,6 +20,7 @@ export default function InspectPanel({ file, edges, rootDir }: InspectPanelProps
 
   const incoming = edges.filter((e) => e.to === file.absolutePath).length;
   const outgoing = edges.filter((e) => e.from === file.absolutePath).length;
+  const impactForThisFile = impact?.targetFile === file.absolutePath ? impact : null;
 
   return (
     <aside className="inspect-panel">
@@ -43,6 +46,28 @@ export default function InspectPanel({ file, edges, rootDir }: InspectPanelProps
         <dt>Outgoing edges</dt>
         <dd>{outgoing}</dd>
       </dl>
+
+      <button type="button" className="show-impact-button" onClick={() => onShowImpact(file.absolutePath)}>
+        Show impact
+      </button>
+
+      {impactForThisFile && (
+        <div className="impact-result">
+          <p>
+            Potential impact: {impactForThisFile.impactedFiles.length} file{impactForThisFile.impactedFiles.length === 1 ? "" : "s"}
+          </p>
+          <p>
+            {impactForThisFile.impactedRoutes.length} route{impactForThisFile.impactedRoutes.length === 1 ? "" : "s"} may be affected
+          </p>
+          {impactForThisFile.impactedRoutes.length > 0 && (
+            <ul className="impact-route-list">
+              {impactForThisFile.impactedRoutes.map((r) => (
+                <li key={r}>{relativePath(r, rootDir)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

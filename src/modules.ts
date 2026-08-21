@@ -40,10 +40,17 @@ export function buildModuleMetrics(files: FileModel[], edges: FileEdge[], rootAb
     c[key]++;
     crossCounts.set(name, c);
   };
+  // A file pair can have both an "import" and a "reExport" edge between the same two files (e.g. a
+  // barrel that both uses and re-exports from the same module) — that's one real cross-module
+  // relationship, not two, so dedupe by (from, to) regardless of kind before counting coupling.
+  const seenPairs = new Set<string>();
   for (const edge of edges) {
     const from = moduleOf.get(edge.from);
     const to = moduleOf.get(edge.to);
     if (!from || !to || from === to) continue;
+    const pairKey = JSON.stringify([edge.from, edge.to]);
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
     bump(from, "ce");
     bump(to, "ca");
   }

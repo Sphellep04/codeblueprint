@@ -144,6 +144,39 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.show-impact-button {
+  font: inherit;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.4rem 0;
+  border: 1px solid rgba(230, 57, 70, 0.6);
+  border-radius: 4px;
+  background: rgba(230, 57, 70, 0.1);
+  color: inherit;
+  cursor: pointer;
+}
+
+.show-impact-button:hover {
+  background: rgba(230, 57, 70, 0.2);
+}
+
+.impact-result {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  font-size: 0.85rem;
+}
+
+.impact-result p {
+  margin: 0.25rem 0;
+}
+
+.impact-route-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
 .hotspots-panel {
   flex: 1;
   overflow: auto;

@@ -12,11 +12,11 @@ import {
   getCyclomaticComplexity,
 } from "./analyzer";
 import { countComponents } from "./componentHeuristics";
-import { buildGraph, inDegrees, findCycles, findCyclePath } from "./graph";
-import { computeEntryPoints } from "./entrypoints";
+import { buildGraph, inDegrees, findCycles, findCyclePath, findDependentsFromReverse, reverseGraph, DependencyGraph } from "./graph";
+import { computeEntryPoints, computeRoutes } from "./entrypoints";
 import { buildCodeGraph, buildFileEdges } from "./codeGraph";
 import { buildModuleMetrics } from "./modules";
-import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport } from "./model";
+import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge } from "./model";
 import { SourceFile } from "ts-morph";
 
 export class CodeAtlasError extends Error {}
@@ -74,22 +74,43 @@ function buildFileModels(rootAbs: string, sourceFiles: SourceFile[]): FileModel[
   });
 }
 
-export function buildProjectModel(rootDir: string): ProjectModel {
-  const { rootAbs, sourceFiles } = loadProject(rootDir);
+/** File-level dependency graph built from FileModel.internalDependencies — the "what does each
+ * file import" edge set every report derives its own graph algorithms from. Factored out once so
+ * summarize/runHotspotReport/buildImpactContext (and, via loadServerData, the Explorer server)
+ * all build it identically instead of each writing out the same two-line edgesByNode/buildGraph
+ * block. */
+function buildFileGraph(files: FileModel[]): DependencyGraph {
+  const edgesByNode = new Map<string, string[]>(files.map((f) => [f.absolutePath, f.internalDependencies]));
+  return buildGraph(
+    files.map((f) => f.absolutePath),
+    edgesByNode
+  );
+}
 
-  return {
-    rootDir: rootAbs,
-    projectName: resolveProjectName(rootAbs),
-    files: buildFileModels(rootAbs, sourceFiles),
-  };
+/** The result of one project parse: everything every report is derived from, computed exactly
+ * once. Each CLI entry point below still calls this independently (a CLI process only ever runs
+ * one mode, so there's nothing to share across calls that never happen together) — but
+ * loadServerData calls it exactly once and derives all three server endpoints' data from the same
+ * ProjectContext, which is where a repeated project parse would otherwise actually cost something. */
+interface ProjectContext {
+  rootAbs: string;
+  projectName: string;
+  sourceFiles: SourceFile[];
+  files: FileModel[];
+}
+
+function buildProjectContext(rootDir: string): ProjectContext {
+  const { rootAbs, sourceFiles } = loadProject(rootDir);
+  return { rootAbs, projectName: resolveProjectName(rootAbs), sourceFiles, files: buildFileModels(rootAbs, sourceFiles) };
+}
+
+export function buildProjectModel(rootDir: string): ProjectModel {
+  const ctx = buildProjectContext(rootDir);
+  return { rootDir: ctx.rootAbs, projectName: ctx.projectName, files: ctx.files };
 }
 
 export function summarize(model: ProjectModel): Summary {
-  const edgesByNode = new Map<string, string[]>(model.files.map((f) => [f.absolutePath, f.internalDependencies]));
-  const graph = buildGraph(
-    model.files.map((f) => f.absolutePath),
-    edgesByNode
-  );
+  const graph = buildFileGraph(model.files);
 
   const degrees = inDegrees(graph);
   const orphanFilePaths = model.files.filter((f) => !f.isEntryPoint && (degrees.get(f.absolutePath) ?? 0) === 0).map((f) => f.absolutePath);
@@ -126,31 +147,21 @@ export function runGraphAnalysis(rootDir: string): CodeGraph {
   return buildCodeGraph(sourceFiles, rootAbs);
 }
 
+function deriveExplorerData(ctx: ProjectContext, edges: FileEdge[]): ExplorerData {
+  return { rootDir: ctx.rootAbs, projectName: ctx.projectName, files: ctx.files, edges };
+}
+
 export function runExplorerData(rootDir: string): ExplorerData {
-  const { rootAbs, sourceFiles } = loadProject(rootDir);
-  return {
-    rootDir: rootAbs,
-    projectName: resolveProjectName(rootAbs),
-    files: buildFileModels(rootAbs, sourceFiles),
-    edges: buildFileEdges(sourceFiles, rootAbs),
-  };
+  const ctx = buildProjectContext(rootDir);
+  return deriveExplorerData(ctx, buildFileEdges(ctx.sourceFiles, ctx.rootAbs));
 }
 
 const TOP_HOTSPOTS = 10;
 
-export function runHotspotReport(rootDir: string): HotspotReport {
-  const { rootAbs, sourceFiles } = loadProject(rootDir);
-  const files = buildFileModels(rootAbs, sourceFiles);
-  const edges = buildFileEdges(sourceFiles, rootAbs);
-
-  const edgesByNode = new Map<string, string[]>(files.map((f) => [f.absolutePath, f.internalDependencies]));
-  const graph = buildGraph(
-    files.map((f) => f.absolutePath),
-    edgesByNode
-  );
+function deriveHotspotReport(ctx: ProjectContext, edges: FileEdge[], graph: DependencyGraph): HotspotReport {
   const degrees = inDegrees(graph);
 
-  const hotspots = files
+  const hotspots = ctx.files
     .map((f) => ({ filePath: f.absolutePath, dependents: degrees.get(f.absolutePath) ?? 0 }))
     .filter((h) => h.dependents > 0)
     .sort((a, b) => b.dependents - a.dependents || a.filePath.localeCompare(b.filePath))
@@ -159,10 +170,111 @@ export function runHotspotReport(rootDir: string): HotspotReport {
   const cycles = findCycles(graph).map((members) => ({ files: findCyclePath(members, graph) }));
 
   return {
-    rootDir: rootAbs,
-    projectName: resolveProjectName(rootAbs),
+    rootDir: ctx.rootAbs,
+    projectName: ctx.projectName,
     hotspots,
     cycles,
-    modules: buildModuleMetrics(files, edges, rootAbs),
+    modules: buildModuleMetrics(ctx.files, edges, ctx.rootAbs),
+  };
+}
+
+export function runHotspotReport(rootDir: string): HotspotReport {
+  const ctx = buildProjectContext(rootDir);
+  const edges = buildFileEdges(ctx.sourceFiles, ctx.rootAbs);
+  return deriveHotspotReport(ctx, edges, buildFileGraph(ctx.files));
+}
+
+interface ImpactContext {
+  rootAbs: string;
+  projectName: string;
+  files: FileModel[];
+  /** Pre-reversed graph (see graph.ts's reverseGraph) — built once per ImpactContext so repeated
+   * computeImpact calls against the same context (one per /api/impact request from the Explorer)
+   * each do only an O(V+E) BFS, not a fresh O(V+E) reversal on top of it. */
+  reverse: DependencyGraph;
+  routes: Set<string>;
+}
+
+function buildImpactContextFrom(ctx: ProjectContext, graph: DependencyGraph): ImpactContext {
+  return {
+    rootAbs: ctx.rootAbs,
+    projectName: ctx.projectName,
+    files: ctx.files,
+    reverse: reverseGraph(graph),
+    routes: computeRoutes(
+      ctx.rootAbs,
+      ctx.files.map((f) => f.absolutePath)
+    ),
+  };
+}
+
+/**
+ * Resolves a user-typed --impact path to one of the actually-scanned files. Relative paths
+ * resolve against rootAbs (the project root the user already gave), not process.cwd(), so the
+ * result doesn't depend on where codeatlas happens to be invoked from; path.resolve also collapses
+ * any ".."/"." segments regardless of whether the input was relative or absolute. Falls back to a
+ * case-insensitive match if no exact match is found, since Windows/macOS's case-insensitive
+ * filesystems mean a user-typed path can legitimately differ in case from the on-disk casing
+ * ts-morph reports — only case itself is forgiven, not a genuinely different path. Throws
+ * CodeAtlasError, not a silent empty report, when nothing matches at all.
+ */
+function resolveTargetFile(ctx: ImpactContext, targetFile: string): string {
+  const normalized = path.resolve(ctx.rootAbs, targetFile).replace(/\\/g, "/");
+  const match =
+    ctx.files.find((f) => f.absolutePath === normalized) ??
+    ctx.files.find((f) => f.absolutePath.toLowerCase() === normalized.toLowerCase());
+  if (!match) {
+    throw new CodeAtlasError(`"${targetFile}" does not match a scanned file in this project (looked for "${normalized}").`);
+  }
+  return match.absolutePath;
+}
+
+function computeImpact(ctx: ImpactContext, targetFile: string): ImpactReport {
+  const resolved = resolveTargetFile(ctx, targetFile);
+  const impactedFiles = findDependentsFromReverse(ctx.reverse, resolved);
+  return {
+    rootDir: ctx.rootAbs,
+    projectName: ctx.projectName,
+    targetFile: resolved,
+    impactedFiles,
+    impactedRoutes: impactedFiles.filter((f) => ctx.routes.has(f)),
+  };
+}
+
+export function runImpactAnalysis(rootDir: string, targetFile: string): ImpactReport {
+  const ctx = buildProjectContext(rootDir);
+  return computeImpact(buildImpactContextFrom(ctx, buildFileGraph(ctx.files)), targetFile);
+}
+
+/** Server-only: one project parse, returning a bound closure so every /api/impact request is just
+ * an O(V+E) BFS against an already-built (and already-reversed) graph — no re-parsing, and no
+ * graph-reversal, per click. */
+export function loadImpactContext(rootDir: string): { computeImpact: (targetFile: string) => ImpactReport } {
+  const ctx = buildProjectContext(rootDir);
+  const impactCtx = buildImpactContextFrom(ctx, buildFileGraph(ctx.files));
+  return { computeImpact: (targetFile: string) => computeImpact(impactCtx, targetFile) };
+}
+
+/**
+ * Everything the --serve Explorer needs, from exactly one project parse. createServer previously
+ * called runExplorerData/runHotspotReport/loadImpactContext independently, each doing its own full
+ * ts-morph parse — three full parses (plus three separate FileModel[] builds, including the
+ * getCyclomaticComplexity walk over every function) at every --serve startup. This does the parse
+ * once and derives all three outputs from the same ProjectContext/graph.
+ */
+export function loadServerData(rootDir: string): {
+  explorerData: ExplorerData;
+  hotspotReport: HotspotReport;
+  computeImpact: (targetFile: string) => ImpactReport;
+} {
+  const ctx = buildProjectContext(rootDir);
+  const edges = buildFileEdges(ctx.sourceFiles, ctx.rootAbs);
+  const graph = buildFileGraph(ctx.files);
+  const impactCtx = buildImpactContextFrom(ctx, graph);
+
+  return {
+    explorerData: deriveExplorerData(ctx, edges),
+    hotspotReport: deriveHotspotReport(ctx, edges, graph),
+    computeImpact: (targetFile: string) => computeImpact(impactCtx, targetFile),
   };
 }

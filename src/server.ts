@@ -2,7 +2,7 @@ import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import { exec } from "child_process";
-import { runExplorerData, runHotspotReport } from "./orchestrator";
+import { loadServerData, CodeAtlasError } from "./orchestrator";
 
 export const DEFAULT_PORT = 4787;
 
@@ -81,14 +81,16 @@ function serveStatic(uiDir: string | undefined, urlPath: string, res: http.Serve
 }
 
 /**
- * Builds an unlistened HTTP server for the --serve Explorer. ExplorerData is computed once, up
- * front, and served verbatim on every request — the project doesn't change during the server's
- * lifetime, so re-analyzing per-request would just be wasted work. uiDir defaults to the
+ * Builds an unlistened HTTP server for the --serve Explorer. loadServerData does exactly one
+ * project parse and derives ExplorerData/HotspotReport (both served verbatim on every request —
+ * the project doesn't change during the server's lifetime) plus a bound impact-computation closure
+ * (recomputed per request, since the target file varies per click). uiDir defaults to the
  * auto-detected build output; tests pass an explicit directory to serve fixture assets instead.
  */
 export function createServer(rootDir: string, uiDir: string | undefined = resolveUiDir()): http.Server {
-  const explorerDataJson = JSON.stringify(runExplorerData(rootDir));
-  const hotspotReportJson = JSON.stringify(runHotspotReport(rootDir));
+  const { explorerData, hotspotReport, computeImpact } = loadServerData(rootDir);
+  const explorerDataJson = JSON.stringify(explorerData);
+  const hotspotReportJson = JSON.stringify(hotspotReport);
 
   return http.createServer((req, res) => {
     if (req.method !== "GET") {
@@ -106,6 +108,35 @@ export function createServer(rootDir: string, uiDir: string | undefined = resolv
     if (req.url === "/api/hotspots") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(hotspotReportJson);
+      return;
+    }
+
+    // Exact match or "?"-prefixed query string only — a startsWith check here would also swallow
+    // an unrelated future path like /api/impact-summary or a typo'd /api/impacts.
+    if (req.url === "/api/impact" || req.url?.startsWith("/api/impact?")) {
+      const file = new URL(req.url, "http://localhost").searchParams.get("file");
+      if (!file) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Missing required 'file' query parameter." }));
+        return;
+      }
+
+      // Resolve the report fully before writing any headers — writeHead(200) can't be undone if
+      // computeImpact throws partway through building the response body.
+      let report;
+      try {
+        report = computeImpact(file);
+      } catch (err) {
+        if (err instanceof CodeAtlasError) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+        throw err;
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(report));
       return;
     }
 

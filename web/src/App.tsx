@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchExplorerData, fetchHotspotReport } from "./lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchExplorerData, fetchHotspotReport, fetchImpact } from "./lib/api";
 import { buildFileTree } from "./lib/tree";
 import Sidebar from "./components/Sidebar";
 import GraphView from "./components/GraphView";
 import SearchBox from "./components/SearchBox";
 import InspectPanel from "./components/InspectPanel";
 import HotspotsPanel from "./components/HotspotsPanel";
-import type { ExplorerData, HotspotReport } from "./types";
+import type { ExplorerData, HotspotReport, ImpactReport } from "./types";
 
 type LoadState =
   | { status: "loading" }
@@ -20,6 +20,14 @@ export default function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [view, setView] = useState<View>("graph");
+  const [impact, setImpact] = useState<ImpactReport | null>(null);
+
+  // Guards against a stale /api/impact response: if the user re-selects (or searches) before an
+  // in-flight "Show impact" fetch resolves, the late response must not overwrite the newer state.
+  const selectedPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedPathRef.current = selectedPath;
+  }, [selectedPath]);
 
   useEffect(() => {
     Promise.all([fetchExplorerData(), fetchHotspotReport()])
@@ -32,7 +40,26 @@ export default function App() {
     return buildFileTree(state.data.files, state.data.rootDir);
   }, [state]);
 
-  const onSelect = useCallback((path: string) => setSelectedPath(path), []);
+  const onSelect = useCallback((path: string) => {
+    setSelectedPath(path);
+    setImpact(null); // a new selection invalidates whatever impact set was showing
+  }, []);
+
+  const onSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+    setImpact(null); // search and impact highlighting never coexist — the new search takes over
+  }, []);
+
+  const onShowImpact = useCallback(async (filePath: string) => {
+    try {
+      const report = await fetchImpact(filePath);
+      if (selectedPathRef.current !== filePath) return; // selection moved on while this was in flight
+      setImpact(report);
+    } catch (err) {
+      // Non-fatal — the inspect panel just won't show an impact result; log for diagnosis.
+      console.error("Failed to load impact data:", err);
+    }
+  }, []);
 
   if (state.status === "loading") {
     return <div className="app-placeholder">Loading…</div>;
@@ -60,14 +87,14 @@ export default function App() {
               Hotspots
             </button>
           </div>
-          {view === "graph" && <SearchBox value={searchTerm} onChange={setSearchTerm} />}
+          {view === "graph" && <SearchBox value={searchTerm} onChange={onSearchChange} />}
         </div>
       </header>
       {view === "graph" ? (
         <div className="app-body">
           {tree && <Sidebar tree={tree} selectedPath={selectedPath} onSelect={onSelect} />}
-          <GraphView data={data} selectedPath={selectedPath} searchTerm={searchTerm} onSelect={onSelect} />
-          <InspectPanel file={selectedFile} edges={data.edges} rootDir={data.rootDir} />
+          <GraphView data={data} selectedPath={selectedPath} searchTerm={searchTerm} impact={impact} onSelect={onSelect} />
+          <InspectPanel file={selectedFile} edges={data.edges} rootDir={data.rootDir} impact={impact} onShowImpact={onShowImpact} />
         </div>
       ) : (
         <HotspotsPanel data={hotspots} />

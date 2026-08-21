@@ -107,7 +107,11 @@ export function findCyclePath(members: string[], graph: DependencyGraph): string
   let current = members[0];
 
   while (true) {
-    const neighbors = Array.from(graph.edges.get(current) ?? []).filter((n) => memberSet.has(n));
+    // Self-loops are excluded here: members.length > 1 at this point (the single-node/self-loop
+    // case already returned above), so a self-loop on `current` would otherwise look like an
+    // immediate "back edge," closing the path against itself and hiding the real multi-file cycle
+    // that actually put `current` in this SCC.
+    const neighbors = Array.from(graph.edges.get(current) ?? []).filter((n) => memberSet.has(n) && n !== current);
     const backEdge = neighbors.find((n) => indexOnPath.has(n));
     if (backEdge !== undefined) return path.slice(indexOnPath.get(backEdge)!);
 
@@ -116,4 +120,49 @@ export function findCyclePath(members: string[], graph: DependencyGraph): string
     indexOnPath.set(next, path.length - 1);
     current = next;
   }
+}
+
+/** Reverses a DependencyGraph's edges: edges.get(X) becomes "who depends on X" instead of "what X depends on." */
+export function reverseGraph(graph: DependencyGraph): DependencyGraph {
+  const edges = new Map<string, Set<string>>();
+  for (const node of graph.nodes) edges.set(node, new Set());
+  for (const [from, targets] of graph.edges) {
+    for (const to of targets) {
+      edges.get(to)?.add(from);
+    }
+  }
+  return { nodes: graph.nodes, edges };
+}
+
+/**
+ * Full transitive closure of files that (directly or indirectly) depend on `target`, given an
+ * already-reversed graph (see reverseGraph) — BFS, O(V+E). Excludes target itself even if
+ * reachable through a cycle back to it: target is seeded into `visited` before the walk starts, so
+ * a cycle looping back to it is a dead end, not a re-add. Split out from findDependents so a caller
+ * making many queries against the same graph (e.g. one --impact request per click against a
+ * server's already-loaded project) can reverse the graph once and reuse it, instead of paying the
+ * O(V+E) reversal cost on every query.
+ */
+export function findDependentsFromReverse(reverse: DependencyGraph, target: string): string[] {
+  const visited = new Set<string>([target]);
+  const result: string[] = [];
+  const queue: string[] = [target];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const dependent of reverse.edges.get(current) ?? []) {
+      if (visited.has(dependent)) continue;
+      visited.add(dependent);
+      result.push(dependent);
+      queue.push(dependent);
+    }
+  }
+
+  return result;
+}
+
+/** Convenience one-shot form of findDependentsFromReverse for a caller that only needs a single
+ * query against `graph` and doesn't already have (or want to keep) a reversed copy of it. */
+export function findDependents(graph: DependencyGraph, target: string): string[] {
+  return findDependentsFromReverse(reverseGraph(graph), target);
 }

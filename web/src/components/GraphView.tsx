@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
-import type { ExplorerData } from "../types";
+import type { ExplorerData, ImpactReport } from "../types";
 import { relativePath } from "../lib/paths";
 
 interface GraphViewProps {
   data: ExplorerData;
   selectedPath: string | null;
   searchTerm: string;
+  impact: ImpactReport | null;
   onSelect: (path: string) => void;
 }
 
@@ -39,10 +40,14 @@ const STYLE: cytoscape.StylesheetStyle[] = [
   { selector: 'edge[kind = "reExport"]', style: { "line-style": "dashed" } },
   { selector: ".faded", style: { opacity: 0.08 } },
   { selector: ".highlighted", style: { "background-color": "#ffcc00" } },
+  // .impact-target comes after node:selected so it wins when both apply (the common case: a file
+  // is selected, then "Show impact" is clicked on it) — Cytoscape resolves same-specificity
+  // property conflicts by declaration order, later wins.
   { selector: "node:selected", style: { "border-width": 3, "border-color": "#222" } },
+  { selector: ".impact-target", style: { "border-width": 3, "border-color": "#e63946" } },
 ];
 
-export default function GraphView({ data, selectedPath, searchTerm, onSelect }: GraphViewProps) {
+export default function GraphView({ data, selectedPath, searchTerm, impact, onSelect }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -81,10 +86,25 @@ export default function GraphView({ data, selectedPath, searchTerm, onSelect }: 
     if (selectedPath) cy.$id(selectedPath).select();
   }, [selectedPath]);
 
-  // Fade non-matching nodes/edges while a search term is active.
+  // Highlight either the active impact set (takes priority while present) or search matches —
+  // never both at once, so there's never a need to reconcile two active highlight states.
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+
+    if (impact) {
+      const impactedSet = new Set(impact.impactedFiles);
+      cy.nodes().forEach((node) => {
+        const id = node.id();
+        node.toggleClass("impact-target", id === impact.targetFile);
+        node.toggleClass("highlighted", impactedSet.has(id));
+        node.toggleClass("faded", id !== impact.targetFile && !impactedSet.has(id));
+      });
+      cy.edges().addClass("faded");
+      return;
+    }
+
+    cy.elements().removeClass("impact-target");
 
     if (!searchTerm.trim()) {
       cy.elements().removeClass("faded highlighted");
@@ -98,7 +118,7 @@ export default function GraphView({ data, selectedPath, searchTerm, onSelect }: 
       node.toggleClass("faded", !matches);
     });
     cy.edges().addClass("faded");
-  }, [searchTerm]);
+  }, [searchTerm, impact]);
 
   return <div ref={containerRef} className="graph-view" />;
 }

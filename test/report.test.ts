@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { formatHotspotReport } from "../src/report";
-import { HotspotReport } from "../src/model";
+import { formatHotspotReport, formatImpactReport } from "../src/report";
+import { HotspotReport, ImpactReport } from "../src/model";
 
 const SAMPLE: HotspotReport = {
   rootDir: "/project",
@@ -31,4 +31,34 @@ test("formatHotspotReport: empty hotspots/cycles render '(none)' instead of an e
   const cyclesIdx = lines.findIndex((l) => l === "Circular dependencies");
   assert.equal(lines[hotspotsIdx + 1], "  (none)");
   assert.equal(lines[cyclesIdx + 1], "  (none)");
+});
+
+const IMPACT_SAMPLE: ImpactReport = {
+  rootDir: "/project",
+  projectName: "sample",
+  targetFile: "/project/src/auth.ts",
+  impactedFiles: ["/project/src/navbar.tsx", "/project/src/dashboard.tsx"],
+  impactedRoutes: ["/project/pages/settings.tsx"],
+};
+
+test("formatImpactReport: includes the target, impact count, file list, and route count", () => {
+  const text = formatImpactReport(IMPACT_SAMPLE);
+  assert.match(text, /Target: src\/auth\.ts/);
+  assert.match(text, /Potential impact: 2 files/);
+  assert.match(text, /src\/navbar\.tsx/);
+  assert.match(text, /src\/dashboard\.tsx/);
+  assert.match(text, /1 route may be affected/);
+  assert.match(text, /pages\/settings\.tsx/);
+});
+
+test("formatImpactReport: singular wording for exactly one impacted file", () => {
+  const text = formatImpactReport({ ...IMPACT_SAMPLE, impactedFiles: ["/project/src/navbar.tsx"] });
+  assert.match(text, /Potential impact: 1 file\b/);
+});
+
+test("formatImpactReport: zero impact renders a clear empty message instead of an empty list", () => {
+  const text = formatImpactReport({ ...IMPACT_SAMPLE, impactedFiles: [], impactedRoutes: [] });
+  assert.match(text, /Potential impact: 0 files/);
+  assert.match(text, /\(no files depend on this one\)/);
+  assert.match(text, /0 routes may be affected/);
 });

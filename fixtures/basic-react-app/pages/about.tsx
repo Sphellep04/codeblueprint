@@ -1,3 +1,5 @@
+import { formatTitle } from "../src/utils/helpers";
+
 export default function AboutPage() {
-  return <div>about</div>;
+  return <div>{formatTitle("about")}</div>;
 }
