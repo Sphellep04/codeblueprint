@@ -166,3 +166,29 @@ export function findDependentsFromReverse(reverse: DependencyGraph, target: stri
 export function findDependents(graph: DependencyGraph, target: string): string[] {
   return findDependentsFromReverse(reverseGraph(graph), target);
 }
+
+/**
+ * Forward BFS from `start`, following each node's own outgoing edges (the mirror image of
+ * findDependentsFromReverse, which walks a reversed graph). Everything transitively reachable
+ * "downstream" of start, cycle-safe the same way: start is seeded into `visited` before the walk,
+ * so a cycle looping back to it is a dead end, not a re-add. Used for symbol-level call-chain
+ * tracing (what does this symbol, directly or indirectly, end up calling), as distinct from
+ * findDependents' "who transitively depends on this."
+ */
+export function findReachableForward(graph: DependencyGraph, start: string): string[] {
+  const visited = new Set<string>([start]);
+  const result: string[] = [];
+  const queue: string[] = [start];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const next of graph.edges.get(current) ?? []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      result.push(next);
+      queue.push(next);
+    }
+  }
+
+  return result;
+}

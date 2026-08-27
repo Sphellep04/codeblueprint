@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { buildGraph, findCycles, findCyclePath, findDependents, inDegrees, DependencyGraph } from "../src/graph";
+import { buildGraph, findCycles, findCyclePath, findDependents, findReachableForward, inDegrees, DependencyGraph } from "../src/graph";
 
 /** A cycle path is valid iff every consecutive pair (wrapping around) is a real edge in the graph. */
 function assertIsValidCycle(path: string[], graph: DependencyGraph): void {
@@ -139,6 +139,69 @@ test("findDependents: a diamond dependency doesn't produce a duplicate", () => {
 test("findDependents: an isolated node has no dependents", () => {
   const graph = buildGraph(["a"], new Map([["a", []]]));
   assert.deepEqual(findDependents(graph, "a"), []);
+});
+
+test("findReachableForward: a linear chain returns every downstream node", () => {
+  const graph = buildGraph(
+    ["a", "b", "c"],
+    new Map([
+      ["a", ["b"]],
+      ["b", ["c"]],
+      ["c", []],
+    ])
+  );
+  assert.deepEqual(findReachableForward(graph, "a"), ["b", "c"]);
+  assert.deepEqual(findReachableForward(graph, "c"), []);
+});
+
+test("findReachableForward: a 2-node cycle's reachable set is the other node, not itself", () => {
+  const graph = buildGraph(
+    ["a", "b"],
+    new Map([
+      ["a", ["b"]],
+      ["b", ["a"]],
+    ])
+  );
+  assert.deepEqual(findReachableForward(graph, "a"), ["b"]);
+  assert.deepEqual(findReachableForward(graph, "b"), ["a"]);
+});
+
+test("findReachableForward: a fan-out doesn't produce a duplicate when paths reconverge", () => {
+  // a -> b -> d, a -> c -> d: two paths from a to d, but d must appear once in a's reachable set.
+  const graph = buildGraph(
+    ["a", "b", "c", "d"],
+    new Map([
+      ["a", ["b", "c"]],
+      ["b", ["d"]],
+      ["c", ["d"]],
+      ["d", []],
+    ])
+  );
+  const reachable = findReachableForward(graph, "a");
+  assert.deepEqual(new Set(reachable), new Set(["b", "c", "d"]));
+  assert.equal(reachable.length, 3);
+});
+
+test("findReachableForward: an isolated node reaches nothing", () => {
+  const graph = buildGraph(["a"], new Map([["a", []]]));
+  assert.deepEqual(findReachableForward(graph, "a"), []);
+});
+
+test("findReachableForward: is the mirror of findDependents (a reaches b forward iff a is among b's dependents)", () => {
+  const graph = buildGraph(
+    ["a", "b", "c", "d"],
+    new Map([
+      ["a", ["b", "c"]],
+      ["b", ["d"]],
+      ["c", ["d"]],
+      ["d", []],
+    ])
+  );
+  for (const node of graph.nodes) {
+    for (const reached of findReachableForward(graph, node)) {
+      assert.ok(findDependents(graph, reached).includes(node), `${node} should be among ${reached}'s dependents`);
+    }
+  }
 });
 
 test("inDegrees: node with no incoming edges is 0", () => {
