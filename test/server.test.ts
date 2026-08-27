@@ -5,12 +5,16 @@ import * as fs from "fs";
 import * as os from "os";
 import type { AddressInfo } from "net";
 import { createServer } from "../src/server";
-import { ExplorerData, HotspotReport, ImpactReport } from "../src/model";
+import { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
 
-async function withServer<T>(uiDir: string | undefined, fn: (baseUrl: string) => Promise<T>): Promise<T> {
-  const server = createServer(FIXTURE, uiDir);
+async function withServer<T>(
+  uiDir: string | undefined,
+  fn: (baseUrl: string) => Promise<T>,
+  openInEditor?: (filePath: string, line: number) => void
+): Promise<T> {
+  const server = createServer(FIXTURE, uiDir, openInEditor);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const port = (server.address() as AddressInfo).port;
   try {
@@ -158,4 +162,73 @@ test("static serving: a malformed percent-encoded path doesn't crash the server"
     const stillAlive = await fetch(`${baseUrl}/index.html`);
     assert.equal(stillAlive.status, 200);
   });
+});
+
+test("GET /api/code-graph returns the CodeGraph shape for the fixture", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/code-graph`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "application/json");
+
+    const data = (await res.json()) as CodeGraph;
+    assert.ok(data.symbols.length > 0);
+    assert.ok(data.usages.length > 0);
+    assert.ok(data.files.length > 0);
+    assert.ok(Array.isArray(data.imports));
+  });
+});
+
+test("GET /api/open-source?file=<known file>&line=<n> responds 200 and invokes openInEditor with the resolved path and line", async () => {
+  const calls: Array<[string, number]> = [];
+  const target = path.join(FIXTURE, "src", "utils", "helpers.ts").replace(/\\/g, "/");
+
+  await withServer(
+    undefined,
+    async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/open-source?file=${encodeURIComponent(target)}&line=5`);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { opened: true });
+      assert.deepEqual(calls, [[target, 5]]);
+    },
+    (filePath, line) => calls.push([filePath, line])
+  );
+});
+
+test("GET /api/open-source?file=<unknown file> responds 404 and does not invoke openInEditor", async () => {
+  const calls: Array<[string, number]> = [];
+
+  await withServer(
+    undefined,
+    async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/open-source?file=${encodeURIComponent("/does/not/exist.ts")}`);
+      assert.equal(res.status, 404);
+      assert.deepEqual(calls, []);
+    },
+    (filePath, line) => calls.push([filePath, line])
+  );
+});
+
+test("GET /api/open-source with no 'file' query param responds 400", async () => {
+  await withServer(undefined, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/open-source`);
+    assert.equal(res.status, 400);
+  });
+});
+
+test("GET /api/open-source with a missing or invalid 'line' defaults to 1", async () => {
+  const calls: Array<[string, number]> = [];
+  const target = path.join(FIXTURE, "src", "utils", "helpers.ts").replace(/\\/g, "/");
+
+  await withServer(
+    undefined,
+    async (baseUrl) => {
+      await fetch(`${baseUrl}/api/open-source?file=${encodeURIComponent(target)}`);
+      await fetch(`${baseUrl}/api/open-source?file=${encodeURIComponent(target)}&line=not-a-number`);
+      assert.deepEqual(calls, [
+        [target, 1],
+        [target, 1],
+      ]);
+    },
+    (filePath, line) => calls.push([filePath, line])
+  );
 });

@@ -275,6 +275,8 @@ export function loadServerData(rootDir: string): {
   explorerData: ExplorerData;
   hotspotReport: HotspotReport;
   computeImpact: (targetFile: string) => ImpactReport;
+  codeGraph: CodeGraph;
+  resolveFile: (targetFile: string) => string;
 } {
   const ctx = buildProjectContext(rootDir);
   const edges = buildFileEdges(ctx.sourceFiles, ctx.rootAbs);
@@ -285,6 +287,8 @@ export function loadServerData(rootDir: string): {
     explorerData: deriveExplorerData(ctx, edges),
     hotspotReport: deriveHotspotReport(ctx, edges, graph),
     computeImpact: (targetFile: string) => computeImpact(impactCtx, targetFile),
+    codeGraph: buildCodeGraph(ctx.sourceFiles, ctx.rootAbs),
+    resolveFile: (targetFile: string) => resolveKnownFile(ctx.files, ctx.rootAbs, targetFile),
   };
 }
 

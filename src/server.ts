@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { loadServerData, CodeBlueprintError } from "./orchestrator";
 
 export const DEFAULT_PORT = 4787;
@@ -81,16 +81,45 @@ function serveStatic(uiDir: string | undefined, urlPath: string, res: http.Serve
 }
 
 /**
- * Builds an unlistened HTTP server for the --serve Explorer. loadServerData does exactly one
- * project parse and derives ExplorerData/HotspotReport (both served verbatim on every request —
- * the project doesn't change during the server's lifetime) plus a bound impact-computation closure
- * (recomputed per request, since the target file varies per click). uiDir defaults to the
- * auto-detected build output; tests pass an explicit directory to serve fixture assets instead.
+ * Opens a file at a specific line in the user's local editor — VS Code via its `-g file:line` CLI
+ * flag, falling back to the OS's default file handler if that fails (e.g. VS Code isn't installed).
+ * Uses execFile, not exec, throughout: filePath is already validated against known scanned files by
+ * the caller, but is still request-derived, so it's never passed through a shell. On win32, VS
+ * Code's `code` launcher is `code.cmd`, a batch file — execFile/spawn without shell:true cannot run
+ * `.cmd` files directly, so both the primary attempt and the fallback are routed through `cmd /c`
+ * there; darwin/linux's `code`/`open`/`xdg-open` are real executables and don't need that.
  */
-export function createServer(rootDir: string, uiDir: string | undefined = resolveUiDir()): http.Server {
-  const { explorerData, hotspotReport, computeImpact } = loadServerData(rootDir);
+function defaultOpenInEditor(filePath: string, line: number): void {
+  const target = `${filePath}:${line}`;
+  const openWithCode =
+    process.platform === "win32" ? execFile("cmd", ["/c", "code", "-g", target]) : execFile("code", ["-g", target]);
+
+  openWithCode.on("error", () => {
+    if (process.platform === "win32") execFile("cmd", ["/c", "start", "", filePath]);
+    else if (process.platform === "darwin") execFile("open", [filePath]);
+    else execFile("xdg-open", [filePath]);
+  });
+}
+
+/**
+ * Builds an unlistened HTTP server for the --serve Explorer. loadServerData does exactly one
+ * project parse and derives ExplorerData/HotspotReport/CodeGraph (all served verbatim on every
+ * request — the project doesn't change during the server's lifetime) plus bound
+ * impact-computation/file-resolution closures (recomputed per request, since the target varies per
+ * click). uiDir defaults to the auto-detected build output; tests pass an explicit directory to
+ * serve fixture assets instead. openInEditor defaults to the real (process-launching)
+ * implementation; tests inject a spy instead, since actually launching an editor is not something a
+ * test run should ever do.
+ */
+export function createServer(
+  rootDir: string,
+  uiDir: string | undefined = resolveUiDir(),
+  openInEditor: (filePath: string, line: number) => void = defaultOpenInEditor
+): http.Server {
+  const { explorerData, hotspotReport, computeImpact, codeGraph, resolveFile } = loadServerData(rootDir);
   const explorerDataJson = JSON.stringify(explorerData);
   const hotspotReportJson = JSON.stringify(hotspotReport);
+  const codeGraphJson = JSON.stringify(codeGraph);
 
   return http.createServer((req, res) => {
     if (req.method !== "GET") {
@@ -108,6 +137,41 @@ export function createServer(rootDir: string, uiDir: string | undefined = resolv
     if (req.url === "/api/hotspots") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(hotspotReportJson);
+      return;
+    }
+
+    if (req.url === "/api/code-graph") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(codeGraphJson);
+      return;
+    }
+
+    if (req.url === "/api/open-source" || req.url?.startsWith("/api/open-source?")) {
+      const params = new URL(req.url, "http://localhost").searchParams;
+      const file = params.get("file");
+      if (!file) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Missing required 'file' query parameter." }));
+        return;
+      }
+
+      let resolvedPath: string;
+      try {
+        resolvedPath = resolveFile(file);
+      } catch (err) {
+        if (err instanceof CodeBlueprintError) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+        throw err;
+      }
+
+      const line = Math.max(1, parseInt(params.get("line") ?? "1", 10) || 1);
+      openInEditor(resolvedPath, line);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ opened: true }));
       return;
     }
 
