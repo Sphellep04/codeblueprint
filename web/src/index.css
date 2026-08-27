@@ -40,6 +40,15 @@ body {
   gap: 0.75rem;
 }
 
+.hide-reexports-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .view-toggle {
   display: flex;
   border: 1px solid rgba(128, 128, 128, 0.4);
@@ -94,9 +103,15 @@ body {
   font-weight: 600;
 }
 
-.graph-view {
+.graph-view,
+.symbol-graph-view {
   flex: 1;
   min-width: 0;
+}
+
+.app-placeholder-inline {
+  padding: 1.5rem;
+  color: rgba(128, 128, 128, 0.9);
 }
 
 .inspect-panel {
@@ -144,21 +159,34 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.show-impact-button {
+.show-impact-button,
+.open-source-button {
   font: inherit;
   font-weight: 600;
   width: 100%;
   margin-top: 1rem;
   padding: 0.4rem 0;
-  border: 1px solid rgba(230, 57, 70, 0.6);
   border-radius: 4px;
-  background: rgba(230, 57, 70, 0.1);
   color: inherit;
   cursor: pointer;
 }
 
+.show-impact-button {
+  border: 1px solid rgba(230, 57, 70, 0.6);
+  background: rgba(230, 57, 70, 0.1);
+}
+
 .show-impact-button:hover {
   background: rgba(230, 57, 70, 0.2);
+}
+
+.open-source-button {
+  border: 1px solid rgba(80, 140, 255, 0.6);
+  background: rgba(80, 140, 255, 0.1);
+}
+
+.open-source-button:hover {
+  background: rgba(80, 140, 255, 0.2);
 }
 
 .impact-result {

@@ -9,6 +9,7 @@ interface GraphViewProps {
   searchTerm: string;
   impact: ImpactReport | null;
   onSelect: (path: string) => void;
+  hideReExports: boolean;
 }
 
 const STYLE: cytoscape.StylesheetStyle[] = [
@@ -16,10 +17,18 @@ const STYLE: cytoscape.StylesheetStyle[] = [
     selector: "node",
     style: {
       label: "data(label)",
-      "font-size": 8,
+      "font-size": 9,
+      color: "#e6e6e6",
+      "text-valign": "bottom",
+      "text-halign": "center",
+      "text-margin-y": 4,
+      "text-background-color": "#000",
+      "text-background-opacity": 0.55,
+      "text-background-padding": "2px",
+      "text-background-shape": "roundrectangle",
       "background-color": "#6699ff",
-      width: 16,
-      height: 16,
+      width: 14,
+      height: 14,
     },
   },
   {
@@ -38,6 +47,7 @@ const STYLE: cytoscape.StylesheetStyle[] = [
     },
   },
   { selector: 'edge[kind = "reExport"]', style: { "line-style": "dashed" } },
+  { selector: ".hidden-edge", style: { display: "none" } },
   { selector: ".faded", style: { opacity: 0.08 } },
   { selector: ".highlighted", style: { "background-color": "#ffcc00" } },
   // .impact-target comes after node:selected so it wins when both apply (the common case: a file
@@ -47,7 +57,7 @@ const STYLE: cytoscape.StylesheetStyle[] = [
   { selector: ".impact-target", style: { "border-width": 3, "border-color": "#e63946" } },
 ];
 
-export default function GraphView({ data, selectedPath, searchTerm, impact, onSelect }: GraphViewProps) {
+export default function GraphView({ data, selectedPath, searchTerm, impact, onSelect, hideReExports }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -66,7 +76,7 @@ export default function GraphView({ data, selectedPath, searchTerm, impact, onSe
       container: containerRef.current,
       elements: [...nodes, ...edges],
       style: STYLE,
-      layout: { name: "cose", animate: false },
+      layout: { name: "cose", animate: false, nodeRepulsion: () => 12000, idealEdgeLength: () => 80, componentSpacing: 120, nodeOverlap: 20 },
     });
 
     cy.on("tap", "node", (evt) => onSelect(evt.target.id()));
@@ -85,6 +95,10 @@ export default function GraphView({ data, selectedPath, searchTerm, impact, onSe
     cy.nodes().unselect();
     if (selectedPath) cy.$id(selectedPath).select();
   }, [selectedPath]);
+
+  useEffect(() => {
+    cyRef.current?.edges('[kind = "reExport"]').toggleClass("hidden-edge", hideReExports);
+  }, [hideReExports]);
 
   // Highlight either the active impact set (takes priority while present) or search matches —
   // never both at once, so there's never a need to reconcile two active highlight states.

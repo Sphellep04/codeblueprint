@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchExplorerData, fetchHotspotReport, fetchImpact } from "./lib/api";
+import { fetchExplorerData, fetchHotspotReport, fetchImpact, fetchCodeGraph, openInEditor } from "./lib/api";
 import { buildFileTree } from "./lib/tree";
 import Sidebar from "./components/Sidebar";
 import GraphView from "./components/GraphView";
+import SymbolGraphView from "./components/SymbolGraphView";
 import SearchBox from "./components/SearchBox";
 import InspectPanel from "./components/InspectPanel";
 import HotspotsPanel from "./components/HotspotsPanel";
-import type { ExplorerData, HotspotReport, ImpactReport } from "./types";
+import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
 
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; data: ExplorerData; hotspots: HotspotReport };
+  | { status: "ready"; data: ExplorerData; hotspots: HotspotReport; codeGraph: CodeGraph };
 
-type View = "graph" | "hotspots";
+type View = "graph" | "symbols" | "hotspots";
 
 export default function App() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -21,6 +22,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [view, setView] = useState<View>("graph");
   const [impact, setImpact] = useState<ImpactReport | null>(null);
+  const [hideReExports, setHideReExports] = useState(false);
 
   // Guards against a stale /api/impact response: if the user re-selects (or searches) before an
   // in-flight "Show impact" fetch resolves, the late response must not overwrite the newer state.
@@ -30,8 +32,8 @@ export default function App() {
   }, [selectedPath]);
 
   useEffect(() => {
-    Promise.all([fetchExplorerData(), fetchHotspotReport()])
-      .then(([data, hotspots]) => setState({ status: "ready", data, hotspots }))
+    Promise.all([fetchExplorerData(), fetchHotspotReport(), fetchCodeGraph()])
+      .then(([data, hotspots, codeGraph]) => setState({ status: "ready", data, hotspots, codeGraph }))
       .catch((err: unknown) => setState({ status: "error", message: err instanceof Error ? err.message : String(err) }));
   }, []);
 
@@ -61,6 +63,10 @@ export default function App() {
     }
   }, []);
 
+  const onOpenSource = useCallback((file: string, line: number) => {
+    openInEditor(file, line).catch((err: unknown) => console.error("Failed to open in editor:", err));
+  }, []);
+
   if (state.status === "loading") {
     return <div className="app-placeholder">Loading…</div>;
   }
@@ -69,7 +75,7 @@ export default function App() {
     return <div className="app-placeholder">Failed to load project data: {state.message}</div>;
   }
 
-  const { data, hotspots } = state;
+  const { data, hotspots, codeGraph } = state;
   const selectedFile = selectedPath ? data.files.find((f) => f.absolutePath === selectedPath) : undefined;
 
   return (
@@ -83,21 +89,48 @@ export default function App() {
             <button type="button" className={view === "graph" ? "active" : ""} onClick={() => setView("graph")}>
               Graph
             </button>
+            <button type="button" className={view === "symbols" ? "active" : ""} onClick={() => setView("symbols")}>
+              Symbols
+            </button>
             <button type="button" className={view === "hotspots" ? "active" : ""} onClick={() => setView("hotspots")}>
               Hotspots
             </button>
           </div>
+          {view === "graph" && (
+            <label className="hide-reexports-toggle">
+              <input type="checkbox" checked={hideReExports} onChange={(e) => setHideReExports(e.target.checked)} />
+              Hide re-exports
+            </label>
+          )}
           {view === "graph" && <SearchBox value={searchTerm} onChange={onSearchChange} />}
         </div>
       </header>
-      {view === "graph" ? (
+      {view === "hotspots" ? (
+        <HotspotsPanel data={hotspots} />
+      ) : (
         <div className="app-body">
           {tree && <Sidebar tree={tree} selectedPath={selectedPath} onSelect={onSelect} />}
-          <GraphView data={data} selectedPath={selectedPath} searchTerm={searchTerm} impact={impact} onSelect={onSelect} />
-          <InspectPanel file={selectedFile} edges={data.edges} rootDir={data.rootDir} impact={impact} onShowImpact={onShowImpact} />
+          {view === "graph" ? (
+            <GraphView
+              data={data}
+              selectedPath={selectedPath}
+              searchTerm={searchTerm}
+              impact={impact}
+              onSelect={onSelect}
+              hideReExports={hideReExports}
+            />
+          ) : (
+            <SymbolGraphView codeGraph={codeGraph} selectedPath={selectedPath} rootDir={data.rootDir} onOpenSource={onOpenSource} />
+          )}
+          <InspectPanel
+            file={selectedFile}
+            edges={data.edges}
+            rootDir={data.rootDir}
+            impact={impact}
+            onShowImpact={onShowImpact}
+            onOpenSource={onOpenSource}
+          />
         </div>
-      ) : (
-        <HotspotsPanel data={hotspots} />
       )}
     </div>
   );

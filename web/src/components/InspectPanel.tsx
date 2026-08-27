@@ -7,9 +7,10 @@ interface InspectPanelProps {
   rootDir: string;
   impact: ImpactReport | null;
   onShowImpact: (filePath: string) => void;
+  onOpenSource: (file: string, line: number) => void;
 }
 
-export default function InspectPanel({ file, edges, rootDir, impact, onShowImpact }: InspectPanelProps) {
+export default function InspectPanel({ file, edges, rootDir, impact, onShowImpact, onOpenSource }: InspectPanelProps) {
   if (!file) {
     return (
       <aside className="inspect-panel">
@@ -49,6 +50,9 @@ export default function InspectPanel({ file, edges, rootDir, impact, onShowImpac
 
       <button type="button" className="show-impact-button" onClick={() => onShowImpact(file.absolutePath)}>
         Show impact
+      </button>
+      <button type="button" className="open-source-button" onClick={() => onOpenSource(file.absolutePath, 1)}>
+        Open in editor
       </button>
 
       {impactForThisFile && (

@@ -61,3 +61,34 @@ export interface ImpactReport {
   impactedFiles: string[];
   impactedRoutes: string[];
 }
+
+export type SymbolKind = "function" | "method" | "class" | "component";
+
+export interface SymbolModel {
+  id: string;
+  name: string;
+  kind: SymbolKind;
+  filePath: string;
+  line: number;
+  exported: boolean;
+}
+
+export interface ImportEdge {
+  file: string;
+  symbol: string;
+}
+
+export type UsageKind = "calls" | "renders";
+
+export interface SymbolUsageEdge {
+  kind: UsageKind;
+  from: string;
+  to: string;
+}
+
+export interface CodeGraph {
+  files: FileEdge[];
+  symbols: SymbolModel[];
+  imports: ImportEdge[];
+  usages: SymbolUsageEdge[];
+}
