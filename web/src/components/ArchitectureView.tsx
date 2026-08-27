@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
-import type { ExplorerData, CodeGraph } from "../types";
+import type { ExplorerData, CodeGraph, FileModel } from "../types";
 import { relativePath } from "../lib/paths";
 import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
 import { classifyLayer, LAYER_ORDER, LAYER_COLOR } from "../lib/layer";
@@ -26,6 +26,18 @@ const KIND_COLOR: Record<FileKind, string> = {
 };
 
 const LEGEND_ITEMS = LAYER_ORDER.map((layer) => ({ label: layer, color: LAYER_COLOR[layer] }));
+
+// Deterministic band layout: each layer gets its own horizontal row of fixed height, files inside
+// it wrap into a grid. Cytoscape auto-fits a compound parent's box tightly around its children's
+// actual positions regardless of layout algorithm, so giving every file a precomputed, non-
+// overlapping (band, row, column) slot is enough to guarantee the layer boxes themselves never
+// overlap — no fighting cose's compound-separation physics, which cose has no strong guarantees for.
+const NODES_PER_ROW = 5;
+const NODE_SPACING_X = 110;
+const NODE_SPACING_Y = 55;
+const BAND_TOP_PADDING = 50;
+const BAND_BOTTOM_PADDING = 20;
+const BAND_GAP = 50;
 
 const STYLE: cytoscape.StylesheetStyle[] = [
   {
@@ -86,9 +98,28 @@ export default function ArchitectureView({ data, codeGraph, selectedPath, onSele
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const presentLayers = new Set(data.files.map((f) => classifyLayer(f, codeGraph)));
+    const byLayer = new Map<string, FileModel[]>();
+    for (const f of data.files) {
+      const layer = classifyLayer(f, codeGraph);
+      if (!byLayer.has(layer)) byLayer.set(layer, []);
+      byLayer.get(layer)!.push(f);
+    }
+    const presentLayers = LAYER_ORDER.filter((l) => byLayer.has(l));
 
-    const layerNodes: cytoscape.ElementDefinition[] = LAYER_ORDER.filter((l) => presentLayers.has(l)).map((layer) => ({
+    const filePositions = new Map<string, { x: number; y: number }>();
+    let bandTop = 0;
+    for (const layer of presentLayers) {
+      const files = byLayer.get(layer)!;
+      files.forEach((f, i) => {
+        const col = i % NODES_PER_ROW;
+        const row = Math.floor(i / NODES_PER_ROW);
+        filePositions.set(f.absolutePath, { x: col * NODE_SPACING_X, y: bandTop + BAND_TOP_PADDING + row * NODE_SPACING_Y });
+      });
+      const rows = Math.ceil(files.length / NODES_PER_ROW);
+      bandTop += BAND_TOP_PADDING + rows * NODE_SPACING_Y + BAND_BOTTOM_PADDING + BAND_GAP;
+    }
+
+    const layerNodes: cytoscape.ElementDefinition[] = presentLayers.map((layer) => ({
       data: { id: `layer:${layer}`, label: layer, color: LAYER_COLOR[layer] },
       classes: "layer",
     }));
@@ -116,18 +147,11 @@ export default function ArchitectureView({ data, codeGraph, selectedPath, onSele
       container: containerRef.current,
       elements: [...layerNodes, ...fileNodes, ...edges],
       style: STYLE,
-      // TODO(refinement pass): compound-node (layer box) spacing/sizing still needs real tuning —
-      // sibling layer boxes can overlap or, at higher componentSpacing, the auto-fit zooms out far
-      // enough to make labels illegible. Deferred deliberately per the project's "test/refine once
-      // everything is built end-to-end" plan rather than hand-tuning cose parameters in isolation now.
-      layout: {
-        name: "cose",
-        animate: false,
-        nodeRepulsion: () => 10000,
-        idealEdgeLength: () => 70,
-        componentSpacing: 200,
-        nestingFactor: 0.1,
-      },
+      // Only file nodes get an explicit position (the object-map form of `positions` — omitted
+      // keys, like the layer/compound-parent ids here, are simply left unset by Cytoscape); each
+      // layer's box is then derived tightly around its own children's actual positions — exactly
+      // the behavior that guarantees non-overlapping bands here.
+      layout: { name: "preset", positions: Object.fromEntries(filePositions), fit: true, padding: 30 },
     });
 
     cy.on("tap", "node.file", (evt) => onSelect(evt.target.id()));

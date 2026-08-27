@@ -103,7 +103,10 @@ export default function App() {
       }
 
       const target = e.target as HTMLElement | null;
-      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+      // SELECT is included here too: without it, using the Symbols view's "Trace flow from…"
+      // dropdown's native type-ahead (e.g. pressing "s" to jump to a symbol starting with S) would
+      // simultaneously trigger the global view-switch shortcut for that same letter.
+      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
       if (paletteOpen || isTyping) return;
 
       if (e.key === "/") {

@@ -38,5 +38,7 @@ export const LAYER_COLOR: Record<ArchitectureLayer, string> = {
   Services: "#a78bfa",
   Data: "#f5a524",
   Infrastructure: "#6b7280",
-  Other: "#3a3f4b",
+  // Deliberately lighter than Infrastructure's gray, not darker — a near-black "Other" read as a
+  // disabled/broken UI element rather than a legitimate, if unclassified, layer.
+  Other: "#94a3b8",
 };
