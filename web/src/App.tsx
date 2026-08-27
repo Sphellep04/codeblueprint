@@ -11,6 +11,8 @@ import OverviewPanel from "./components/OverviewPanel";
 import CommandPalette from "./components/CommandPalette";
 import ArchitectureView from "./components/ArchitectureView";
 import BlueprintView from "./components/BlueprintView";
+import Logo from "./components/Logo";
+import { OverviewIcon, GraphIcon, ArchitectureIcon, BlueprintIcon, SymbolsIcon, HotspotsIcon } from "./components/Icons";
 import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
 
 type LoadState =
@@ -133,7 +135,12 @@ export default function App() {
   }, [paletteOpen]);
 
   if (state.status === "loading") {
-    return <div className="app-placeholder">Loading…</div>;
+    return (
+      <div className="app-placeholder app-placeholder--loading">
+        <Logo />
+        <p>Analyzing codebase…</p>
+      </div>
+    );
   }
 
   if (state.status === "error") {
@@ -146,27 +153,37 @@ export default function App() {
   return (
     <div className="app-layout">
       <header className="app-header">
-        <span>
-          CodeBlueprint Explorer — {data.projectName} ({data.files.length} files, {data.edges.length} edges)
-        </span>
+        <div className="app-brand">
+          <Logo />
+          <span className="app-brand-name">CodeBlueprint</span>
+          <span className="app-brand-project">
+            {data.projectName} <span className="app-brand-stats">· {data.files.length} files · {data.edges.length} edges</span>
+          </span>
+        </div>
         <div className="app-header-controls">
           <div className="view-toggle" role="tablist">
             <button type="button" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>
+              <OverviewIcon />
               Overview
             </button>
             <button type="button" className={view === "graph" ? "active" : ""} onClick={() => setView("graph")}>
+              <GraphIcon />
               Graph
             </button>
             <button type="button" className={view === "architecture" ? "active" : ""} onClick={() => setView("architecture")}>
+              <ArchitectureIcon />
               Architecture
             </button>
             <button type="button" className={view === "blueprint" ? "active" : ""} onClick={() => setView("blueprint")}>
+              <BlueprintIcon />
               Blueprint
             </button>
             <button type="button" className={view === "symbols" ? "active" : ""} onClick={() => setView("symbols")}>
+              <SymbolsIcon />
               Symbols
             </button>
             <button type="button" className={view === "hotspots" ? "active" : ""} onClick={() => setView("hotspots")}>
+              <HotspotsIcon />
               Hotspots
             </button>
           </div>
@@ -180,30 +197,41 @@ export default function App() {
         </div>
       </header>
       {view === "overview" ? (
-        <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
+        <div className="view-fade" key={view}>
+          <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
+        </div>
       ) : view === "hotspots" ? (
-        <HotspotsPanel data={hotspots} />
+        <div className="view-fade" key={view}>
+          <HotspotsPanel data={hotspots} />
+        </div>
       ) : view === "blueprint" ? (
-        <BlueprintView data={data} codeGraph={codeGraph} />
+        <div className="view-fade" key={view}>
+          <BlueprintView data={data} codeGraph={codeGraph} />
+        </div>
       ) : (
         <div className="app-body">
           {tree && <Sidebar tree={tree} selectedPath={selectedPath} onSelect={onSelect} />}
-          {view === "graph" ? (
-            <GraphView
-              data={data}
-              codeGraph={codeGraph}
-              hotspots={hotspots}
-              selectedPath={selectedPath}
-              searchTerm={searchTerm}
-              impact={impact}
-              onSelect={onSelect}
-              hideReExports={hideReExports}
-            />
-          ) : view === "architecture" ? (
-            <ArchitectureView data={data} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />
-          ) : (
-            <SymbolGraphView codeGraph={codeGraph} selectedPath={selectedPath} rootDir={data.rootDir} onOpenSource={onOpenSource} />
-          )}
+          {/* Sidebar/InspectPanel stay mounted across graph/architecture/symbols switches (they're
+              shared, not per-view) — only the middle content panel remounts+fades, so folder
+              expand/collapse state in the sidebar survives switching tabs. */}
+          <div className="view-fade" key={view}>
+            {view === "graph" ? (
+              <GraphView
+                data={data}
+                codeGraph={codeGraph}
+                hotspots={hotspots}
+                selectedPath={selectedPath}
+                searchTerm={searchTerm}
+                impact={impact}
+                onSelect={onSelect}
+                hideReExports={hideReExports}
+              />
+            ) : view === "architecture" ? (
+              <ArchitectureView data={data} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />
+            ) : (
+              <SymbolGraphView codeGraph={codeGraph} selectedPath={selectedPath} rootDir={data.rootDir} onOpenSource={onOpenSource} />
+            )}
+          </div>
           <InspectPanel
             file={selectedFile}
             edges={data.edges}

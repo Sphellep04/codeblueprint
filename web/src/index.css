@@ -29,6 +29,38 @@ body {
   color: var(--cb-text-dim);
 }
 
+.app-placeholder--loading {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.app-placeholder--loading .app-logo {
+  width: 40px;
+  height: 40px;
+  animation: logo-pulse 1.6s ease-in-out infinite;
+}
+
+.app-placeholder--loading .app-logo svg {
+  width: 22px;
+  height: 22px;
+}
+
+@keyframes logo-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
 .app-layout {
   display: flex;
   flex-direction: column;
@@ -36,14 +68,53 @@ body {
 }
 
 .app-header {
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   background: var(--cb-surface);
   border-bottom: 1px solid var(--cb-border);
-  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.app-logo {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--cb-blue), color-mix(in srgb, var(--cb-blue) 60%, var(--cb-purple)));
+  color: #fff;
+}
+
+.app-brand-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.app-brand-project {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--cb-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--cb-border);
+}
+
+.app-brand-stats {
+  font-variant-numeric: tabular-nums;
 }
 
 .search-box {
@@ -54,6 +125,12 @@ body {
   border: 1px solid var(--cb-border);
   border-radius: 4px;
   color: var(--cb-text);
+  transition: border-color 0.15s ease-out;
+}
+
+.search-box:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--cb-blue) 60%, transparent);
 }
 
 .app-header-controls {
@@ -75,18 +152,28 @@ body {
 .view-toggle {
   display: flex;
   border: 1px solid var(--cb-border);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
 .view-toggle button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font: inherit;
   font-weight: 600;
-  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem;
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--cb-text-dim);
+  transition: background-color 0.15s ease-out, color 0.15s ease-out;
+}
+
+.view-toggle button:hover {
+  color: var(--cb-text);
+  background: color-mix(in srgb, var(--cb-text) 6%, transparent);
 }
 
 .view-toggle button.active {
@@ -94,10 +181,34 @@ body {
   color: var(--cb-text);
 }
 
+.view-toggle button.active:hover {
+  background: color-mix(in srgb, var(--cb-blue) 32%, transparent);
+}
+
 .app-body {
   flex: 1;
   display: flex;
   min-height: 0;
+}
+
+.view-fade {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: view-fade-in 0.18s ease-out;
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .sidebar {
@@ -110,10 +221,12 @@ body {
 }
 
 .tree-item {
-  padding: 2px 8px;
+  padding: 3px 8px;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  border-left: 2px solid transparent;
+  transition: background-color 0.12s ease-out, border-color 0.12s ease-out;
 }
 
 .tree-item:hover {
@@ -122,6 +235,7 @@ body {
 
 .tree-item--selected {
   background: color-mix(in srgb, var(--cb-blue) 25%, transparent);
+  border-left-color: var(--cb-blue);
 }
 
 .tree-dir {
@@ -277,6 +391,7 @@ body {
   padding: 0.5rem 0.6rem;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.1s ease-out;
 }
 
 .command-palette-result--active {
@@ -388,10 +503,16 @@ body {
   font-weight: 600;
   width: 100%;
   margin-top: 1rem;
-  padding: 0.4rem 0;
-  border-radius: 4px;
+  padding: 0.45rem 0;
+  border-radius: 6px;
   color: var(--cb-text);
   cursor: pointer;
+  transition: background-color 0.15s ease-out, transform 0.1s ease-out;
+}
+
+.show-impact-button:active,
+.open-source-button:active {
+  transform: scale(0.98);
 }
 
 .show-impact-button {
@@ -486,8 +607,14 @@ body {
 .module-card {
   background: var(--cb-surface-alt);
   border: 1px solid var(--cb-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
+  transition: border-color 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.module-card:hover {
+  border-color: color-mix(in srgb, var(--cb-blue) 35%, var(--cb-border));
+  transform: translateY(-1px);
 }
 
 .module-card h3 {
@@ -630,6 +757,11 @@ body {
   border-radius: 8px;
   padding: 0.5rem 0.85rem;
   min-width: 150px;
+  transition: border-color 0.15s ease-out;
+}
+
+.health-sub-score:hover {
+  border-color: color-mix(in srgb, var(--cb-blue) 35%, var(--cb-border));
 }
 
 .health-sub-score summary {
@@ -683,6 +815,12 @@ body {
   border-radius: 8px;
   padding: 0.85rem 1rem;
   text-align: center;
+  transition: border-color 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.overview-metric-card:hover {
+  border-color: color-mix(in srgb, var(--cb-blue) 35%, var(--cb-border));
+  transform: translateY(-1px);
 }
 
 .overview-metric-value {
@@ -718,10 +856,12 @@ body {
   border-left: 3px solid var(--cb-border);
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.15s ease-out, transform 0.15s ease-out;
 }
 
 .attention-item:hover {
   background: color-mix(in srgb, var(--cb-surface-alt) 70%, var(--cb-text) 5%);
+  transform: translateX(2px);
 }
 
 .attention-item--risk {
