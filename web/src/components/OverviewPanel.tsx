@@ -1,6 +1,7 @@
 import type { ExplorerData, HotspotReport } from "../types";
 import { relativePath } from "../lib/paths";
 import { orphanFiles } from "../lib/metrics";
+import { computeArchitectureHealth, ScoreBreakdown } from "../lib/health";
 
 interface OverviewPanelProps {
   data: ExplorerData;
@@ -33,10 +34,36 @@ export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHots
     .slice(0, TOP_COUPLED_MODULES);
 
   const hasAttentionItems = hotspots.cycles.length > 0 || orphans.length > 0 || topCoupledModules.length > 0;
+  const health = computeArchitectureHealth(data, hotspots);
 
   return (
     <div className="overview-panel">
       <h1 className="overview-title">{data.projectName}</h1>
+
+      <div className="health-score-card">
+        <div className="health-score-headline">
+          <div className="health-score-value">{health.overall}</div>
+          <div className="health-score-label">
+            ARCHITECTURE HEALTH
+            <div className="health-score-sublabel">Average of the three scores below</div>
+          </div>
+        </div>
+        <div className="health-sub-scores">
+          {[health.modularity, health.dependencyHealth, health.complexity].map((s: ScoreBreakdown) => (
+            <details className="health-sub-score" key={s.label}>
+              <summary>
+                <span className="health-sub-score-label">{s.label}</span>
+                <span className="health-sub-score-value">{s.score}</span>
+              </summary>
+              <ul className="health-reasons">
+                {s.reasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </details>
+          ))}
+        </div>
+      </div>
 
       <div className="overview-metrics-grid">
         {metrics.map((m) => (
