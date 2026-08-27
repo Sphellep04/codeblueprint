@@ -7,6 +7,7 @@ Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structu
 - `--hotspots`: most-connected files, circular-dependency chains, per-module coupling/complexity
 - `--impact <file>`: the full transitive blast radius of changing a file
 - `--serve`: a local web Explorer — pan/zoom graph, search, per-file inspector, impact highlighting
+- `--mcp`: an MCP server so Claude Code/Cursor/Copilot can query the graph directly, no grepping
 - Basic npm/yarn monorepo support — see "Monorepo support" below
 
 ## Quick start
@@ -15,7 +16,7 @@ Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structu
 npx codeblueprint ./my-project
 ```
 
-No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotspots`/`--impact`/`--serve` per the flags below.
+No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotspots`/`--impact`/`--serve`/`--mcp` per the flags below.
 
 ## Usage
 
@@ -26,6 +27,7 @@ codeblueprint <path> --graph
 codeblueprint <path> --hotspots [--json]
 codeblueprint <path> --impact <file> [--json]
 codeblueprint <path> --serve [--port <number>]
+codeblueprint <path> --mcp
 codeblueprint --version
 ```
 
@@ -132,6 +134,42 @@ The Explorer's node set includes every scanned file, including orphans with zero
 **MVP scope**: file-level graph only. The roadmap's further Phase 3 features — hiding edges by dependency type, "focus on this module," jump-from-graph-to-source, and a symbol/call-graph view (the data for the last one already exists via `--graph`, just not wired into the UI yet) — are deferred, not designed away: `FileEdge.kind` is already tagged in the graph data specifically so "hide re-export edges" is a future CSS class toggle, not a rework.
 
 **Frontend dev workflow**: the Explorer lives in `web/` (Vite + React + TypeScript + Cytoscape.js), a separate npm workspace from the CLI with its own `tsconfig.json` — it targets the browser (ESNext modules, DOM lib) where the CLI targets Node (CommonJS). `web/src/types.ts` is a small hand-kept mirror of the relevant `src/model.ts` types, since the two packages don't share a compilation context. To iterate on the UI with hot reload: run `codeblueprint <path> --serve` in one terminal (serves the API on port 4787), then `npm run dev --workspace=web` in another (`web/vite.config.ts` proxies `/api` to port 4787).
+
+## MCP server (`--mcp`)
+
+```
+codeblueprint ./my-project --mcp
+```
+
+Starts a local [MCP](https://modelcontextprotocol.io) server over stdio, so an AI coding assistant
+(Claude Code, Cursor, Copilot, or any other MCP client) can query this project's dependency/symbol
+graph directly instead of grepping files. Six read-only tools, each a thin wrapper over the same
+analysis primitives every other flag uses — no separate analysis pipeline:
+
+- `get_summary` — project-wide structural summary (same data as the base command)
+- `get_file_summary` — one file's metrics (imports/exports/functions/classes/components/complexity)
+- `get_dependencies` — a file's direct dependencies and dependents
+- `find_symbol` — find functions/classes/components by name (case-insensitive substring match)
+- `get_impact` — the full transitive blast radius of changing a file (same as `--impact`)
+- `get_hotspots` — most-connected files, circular-dependency chains, per-module coupling (same as `--hotspots`)
+
+Like `--serve`, the project is parsed exactly once at startup; every tool call after that is a cheap
+in-memory query, not a fresh scan. `--mcp` is mutually exclusive with the other flags, and — critically
+— writes nothing to stdout itself, since stdout *is* the MCP wire protocol; only the SDK's own
+JSON-RPC framing goes there.
+
+To register it with an MCP client, add an entry to the client's MCP config (e.g. Claude Code's
+`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "codeblueprint": { "command": "npx", "args": ["codeblueprint", "--mcp", "."] }
+  }
+}
+```
+
+(Check your specific client's documented config format/location — the shape above is Claude Code's.)
 
 ## Monorepo support
 

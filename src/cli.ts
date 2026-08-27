@@ -5,6 +5,7 @@ import { Command, Option, InvalidArgumentError } from "commander";
 import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, CodeBlueprintError } from "./orchestrator";
 import { printReport, printJson, printHotspotReport, printImpactReport } from "./report";
 import { startServer, DEFAULT_PORT } from "./server";
+import { startMcpServer } from "./mcp";
 
 function parsePort(value: string): number {
   const port = Number(value);
@@ -37,6 +38,7 @@ program
       "graph",
       "serve",
       "impact",
+      "mcp",
     ])
   )
   .addOption(
@@ -44,17 +46,35 @@ program
       "graph",
       "serve",
       "hotspots",
+      "mcp",
     ])
   )
-  .addOption(new Option("--serve", "start a local web server with the CodeBlueprint Explorer").conflicts(["json", "graph", "hotspots", "impact"]))
+  .addOption(
+    new Option("--serve", "start a local web server with the CodeBlueprint Explorer").conflicts(["json", "graph", "hotspots", "impact", "mcp"])
+  )
   .addOption(new Option("--port <number>", `port for --serve (default ${DEFAULT_PORT})`).argParser(parsePort))
-  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; impact?: string; serve?: boolean; port?: number }) => {
+  .addOption(
+    new Option("--mcp", "start a local MCP server exposing read-only graph queries over stdio, for AI coding assistants").conflicts([
+      "json",
+      "graph",
+      "hotspots",
+      "impact",
+      "serve",
+    ])
+  )
+  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; impact?: string; serve?: boolean; port?: number; mcp?: boolean }) => {
     if (options.port !== undefined && !options.serve) {
       program.error("error: --port can only be used together with --serve");
     }
     try {
       if (options.serve) {
         startServer(targetPath, options.port);
+      } else if (options.mcp) {
+        startMcpServer(targetPath).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`Error: ${message}\n`);
+          process.exitCode = 1;
+        });
       } else if (options.graph) {
         printJson(runGraphAnalysis(targetPath));
       } else if (options.hotspots) {
