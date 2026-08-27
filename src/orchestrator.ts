@@ -17,7 +17,7 @@ import { computeEntryPoints, computeRoutes } from "./entrypoints";
 import { detectWorkspace } from "./workspace";
 import { buildCodeGraph, buildFileEdges } from "./codeGraph";
 import { buildModuleMetrics } from "./modules";
-import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge } from "./model";
+import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge, SymbolModel } from "./model";
 import { SourceFile } from "ts-morph";
 
 export class CodeBlueprintError extends Error {}
@@ -219,20 +219,19 @@ function buildImpactContextFrom(ctx: ProjectContext, graph: DependencyGraph): Im
 }
 
 /**
- * Resolves a user-typed --impact path to one of the actually-scanned files. Relative paths
- * resolve against rootAbs (the project root the user already gave), not process.cwd(), so the
- * result doesn't depend on where codeblueprint happens to be invoked from; path.resolve also collapses
- * any ".."/"." segments regardless of whether the input was relative or absolute. Falls back to a
- * case-insensitive match if no exact match is found, since Windows/macOS's case-insensitive
- * filesystems mean a user-typed path can legitimately differ in case from the on-disk casing
- * ts-morph reports — only case itself is forgiven, not a genuinely different path. Throws
- * CodeBlueprintError, not a silent empty report, when nothing matches at all.
+ * Resolves a user-typed path (e.g. --impact's <file>) to one of the actually-scanned files.
+ * Relative paths resolve against rootAbs (the project root the user already gave), not
+ * process.cwd(), so the result doesn't depend on where codeblueprint happens to be invoked from;
+ * path.resolve also collapses any ".."/"." segments regardless of whether the input was relative or
+ * absolute. Falls back to a case-insensitive match if no exact match is found, since
+ * Windows/macOS's case-insensitive filesystems mean a user-typed path can legitimately differ in
+ * case from the on-disk casing ts-morph reports — only case itself is forgiven, not a genuinely
+ * different path. Throws CodeBlueprintError, not a silent empty report, when nothing matches at all.
  */
-function resolveTargetFile(ctx: ImpactContext, targetFile: string): string {
-  const normalized = path.resolve(ctx.rootAbs, targetFile).replace(/\\/g, "/");
+function resolveKnownFile(files: FileModel[], rootAbs: string, targetFile: string): string {
+  const normalized = path.resolve(rootAbs, targetFile).replace(/\\/g, "/");
   const match =
-    ctx.files.find((f) => f.absolutePath === normalized) ??
-    ctx.files.find((f) => f.absolutePath.toLowerCase() === normalized.toLowerCase());
+    files.find((f) => f.absolutePath === normalized) ?? files.find((f) => f.absolutePath.toLowerCase() === normalized.toLowerCase());
   if (!match) {
     throw new CodeBlueprintError(`"${targetFile}" does not match a scanned file in this project (looked for "${normalized}").`);
   }
@@ -240,7 +239,7 @@ function resolveTargetFile(ctx: ImpactContext, targetFile: string): string {
 }
 
 function computeImpact(ctx: ImpactContext, targetFile: string): ImpactReport {
-  const resolved = resolveTargetFile(ctx, targetFile);
+  const resolved = resolveKnownFile(ctx.files, ctx.rootAbs, targetFile);
   const impactedFiles = findDependentsFromReverse(ctx.reverse, resolved);
   return {
     rootDir: ctx.rootAbs,
@@ -286,5 +285,54 @@ export function loadServerData(rootDir: string): {
     explorerData: deriveExplorerData(ctx, edges),
     hotspotReport: deriveHotspotReport(ctx, edges, graph),
     computeImpact: (targetFile: string) => computeImpact(impactCtx, targetFile),
+  };
+}
+
+/**
+ * Backing data for the MCP server (--mcp): one project parse, then six cheap read-only query
+ * functions derived from it — the same "parse once, derive many times" shape as loadServerData,
+ * since an MCP server is a long-lived stdio process answering many tool calls over its lifetime,
+ * not a one-shot CLI invocation. Every function here composes existing analysis primitives; no new
+ * analysis logic is introduced for the MCP surface.
+ */
+export function loadMcpContext(rootDir: string): {
+  getSummary: () => Summary;
+  getFileSummary: (file: string) => FileModel;
+  getDependencies: (file: string) => { dependsOn: string[]; dependents: string[] };
+  findSymbol: (query: string) => SymbolModel[];
+  getImpact: (file: string) => ImpactReport;
+  getHotspots: () => HotspotReport;
+} {
+  const ctx = buildProjectContext(rootDir);
+  const edges = buildFileEdges(ctx.sourceFiles, ctx.rootAbs);
+  const graph = buildFileGraph(ctx.files);
+  const impactCtx = buildImpactContextFrom(ctx, graph);
+  const codeGraph = buildCodeGraph(ctx.sourceFiles, ctx.rootAbs);
+  const hotspotReport = deriveHotspotReport(ctx, edges, graph);
+
+  return {
+    getSummary: () => summarize({ rootDir: ctx.rootAbs, projectName: ctx.projectName, files: ctx.files }),
+
+    getFileSummary: (file) => {
+      const resolved = resolveKnownFile(ctx.files, ctx.rootAbs, file);
+      return ctx.files.find((f) => f.absolutePath === resolved)!;
+    },
+
+    getDependencies: (file) => {
+      const resolved = resolveKnownFile(ctx.files, ctx.rootAbs, file);
+      return {
+        dependsOn: ctx.files.find((f) => f.absolutePath === resolved)!.internalDependencies,
+        dependents: ctx.files.filter((f) => f.internalDependencies.includes(resolved)).map((f) => f.absolutePath),
+      };
+    },
+
+    findSymbol: (query) => {
+      const q = query.toLowerCase();
+      return codeGraph.symbols.filter((s) => s.name.toLowerCase().includes(q));
+    },
+
+    getImpact: (file) => computeImpact(impactCtx, file),
+
+    getHotspots: () => hotspotReport,
   };
 }
