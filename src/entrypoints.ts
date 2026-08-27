@@ -111,14 +111,25 @@ export function computeRoutes(rootAbs: string, filePaths: string[]): Set<string>
 /**
  * Determines whether an absolute file path should be treated as an entry point
  * (never flagged as orphaned) even with zero internal importers.
+ *
+ * packageRoots defaults to [rootAbs] — the ordinary single-package case, unchanged from before this
+ * parameter existed. For a monorepo, callers pass every discovered workspace package's root
+ * alongside rootAbs, so each package's own package.json/index files are recognized as its entry
+ * points too — otherwise, e.g., an app package nothing else imports (apps are typically leaves,
+ * never re-imported by a sibling) would be misreported as an orphan just because it isn't nested
+ * directly under rootAbs itself.
  */
-export function computeEntryPoints(rootAbs: string, filePaths: string[]): Set<string> {
-  const entries = resolvePackageJsonEntryPoints(rootAbs);
+export function computeEntryPoints(rootAbs: string, filePaths: string[], packageRoots: string[] = [rootAbs]): Set<string> {
+  const entries = new Set<string>();
 
-  for (const dir of [rootAbs, path.join(rootAbs, "src")]) {
-    for (const name of [...INDEX_CANDIDATES, ...CONVENTIONAL_ENTRY_BASENAMES]) {
-      const candidate = path.join(dir, name);
-      if (fs.existsSync(candidate)) entries.add(toPosix(candidate));
+  for (const packageRoot of packageRoots) {
+    for (const e of resolvePackageJsonEntryPoints(packageRoot)) entries.add(e);
+
+    for (const dir of [packageRoot, path.join(packageRoot, "src")]) {
+      for (const name of [...INDEX_CANDIDATES, ...CONVENTIONAL_ENTRY_BASENAMES]) {
+        const candidate = path.join(dir, name);
+        if (fs.existsSync(candidate)) entries.add(toPosix(candidate));
+      }
     }
   }
 
@@ -141,7 +152,7 @@ export function computeEntryPoints(rootAbs: string, filePaths: string[]): Set<st
       continue;
     }
 
-    if (toPosix(path.dirname(filePath)) === toPosix(rootAbs) && CONFIG_FILE_RE.test(basename)) {
+    if (packageRoots.some((pr) => toPosix(path.dirname(filePath)) === toPosix(pr)) && CONFIG_FILE_RE.test(basename)) {
       entries.add(filePath);
       continue;
     }

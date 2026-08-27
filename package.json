@@ -1,8 +1,26 @@
 {
   "name": "codeatlas",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "CLI tool for structural analysis of JavaScript/TypeScript/React/Next.js codebases",
-  "private": true,
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sphellep04/codeatlas.git"
+  },
+  "homepage": "https://github.com/Sphellep04/codeatlas#readme",
+  "bugs": {
+    "url": "https://github.com/Sphellep04/codeatlas/issues"
+  },
+  "keywords": [
+    "cli",
+    "codebase-analysis",
+    "dependency-graph",
+    "static-analysis",
+    "typescript",
+    "react",
+    "nextjs"
+  ],
   "bin": {
     "codeatlas": "dist/cli.js"
   },

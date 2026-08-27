@@ -2,6 +2,21 @@
 
 Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structural summary, a relationship graph, and a local web Explorer to browse it visually.
 
+- Structural summary: files, components, functions, classes, imports/exports, circular deps, orphan files
+- `--graph`: a full file/symbol/usage dependency graph
+- `--hotspots`: most-connected files, circular-dependency chains, per-module coupling/complexity
+- `--impact <file>`: the full transitive blast radius of changing a file
+- `--serve`: a local web Explorer — pan/zoom graph, search, per-file inspector, impact highlighting
+- Basic npm/yarn monorepo support — see "Monorepo support" below
+
+## Quick start
+
+```
+npx codeatlas ./my-project
+```
+
+No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotspots`/`--impact`/`--serve` per the flags below.
+
 ## Usage
 
 ```
@@ -14,12 +29,12 @@ codeatlas <path> --serve [--port <number>]
 codeatlas --version
 ```
 
-Local development (not yet published to npm):
+## Local development
 
 ```
 npm install
 npm run build
-npm link          # makes `codeatlas`/`npx codeatlas` resolve globally
+npm link          # makes `codeatlas`/`npx codeatlas` resolve to this local build
 codeatlas ./my-project
 ```
 
@@ -118,6 +133,23 @@ The Explorer's node set includes every scanned file, including orphans with zero
 
 **Frontend dev workflow**: the Explorer lives in `web/` (Vite + React + TypeScript + Cytoscape.js), a separate npm workspace from the CLI with its own `tsconfig.json` — it targets the browser (ESNext modules, DOM lib) where the CLI targets Node (CommonJS). `web/src/types.ts` is a small hand-kept mirror of the relevant `src/model.ts` types, since the two packages don't share a compilation context. To iterate on the UI with hot reload: run `codeatlas <path> --serve` in one terminal (serves the API on port 4787), then `npm run dev --workspace=web` in another (`web/vite.config.ts` proxies `/api` to port 4787).
 
+## Monorepo support
+
+Point `<path>` at a monorepo's root and CodeAtlas automatically detects an npm/yarn workspace (a
+`"workspaces"` field in the root `package.json`, either the plain array form or yarn's `{"packages":
+[...]}` object form) and scans every discovered package as part of the same project — no flag needed,
+the same way `tsconfig.json`/`.gitignore` are already picked up automatically. This fixes the biggest
+practical issue with a naive single-project scan: a package that nothing else in the monorepo imports
+(a leaf app, say) is no longer misreported as an orphan just because its own `package.json`/`index.*`
+weren't checked outside the invoked root — each workspace package's own entry points are now
+recognized too (`entrypoints.ts`'s `computeEntryPoints`, via a `packageRoots` parameter). Everything
+else — `--graph`, `--hotspots`, `--impact`, `--serve` — works across package boundaries for free once
+an edge exists, since none of them are aware a package boundary was ever crossed.
+
+Detection is root-only: run `codeatlas` against the monorepo's actual root, not a single package's
+own subdirectory nested inside a larger workspace — CodeAtlas doesn't walk upward looking for an
+ancestor workspace.
+
 ## Metrics — what's actually counted
 
 - **Files**: `.js/.jsx/.ts/.tsx/.mjs/.cjs/.mts/.cts` files, excluding `node_modules`, `dist`, `build`, `.next`, `out`, `.git`, `coverage`, and anything matched by the project's own `.gitignore`. `.d.ts` files are excluded.
@@ -129,9 +161,13 @@ The Explorer's node set includes every scanned file, including orphans with zero
 - **Circular deps**: the number of distinct strongly-connected clusters (Tarjan's SCC) in the file-level import/re-export graph — not the number of raw edges, and not the number of files involved. A 5-file cycle counts as 1, not 5.
 - **Orphan files**: files with zero internal importers that also aren't recognized as an entry point. Entry points include `package.json`'s `main`/`module`/`browser`/`exports["."]`/`bin` fields, `index.*`/`main.*` at the project root or in `src/`, Next.js `pages/**` and `app/**/{page,layout,loading,error,not-found,route,template,default}.*` + `middleware.*`, test files (`*.test.*`, `*.spec.*`, `__tests__/**`), and root-level `*.config.{js,ts,cjs,mjs}` files. Known false positives: files only reached via `require()`, dynamically-constructed `import()` strings, or Storybook `.stories.*` files.
 
+Every phase of the roadmap is now implemented; the limitations below are the known, deliberate gaps
+in each — none of them produce a wrong result, they simply produce no result (a dropped edge, an
+unrecognized entry point), which is the safe failure mode for a tool whose job is showing real
+relationships.
+
 ## Known Phase 1 limitations
 
-- **Monorepo/workspace-unaware**: a single scan is treated as one flat project. A file only imported from a sibling workspace package (`packages/*`) outside the scanned root will be misreported as an orphan — and, in `--graph` output, will simply be absent from the graph rather than shown as a connected node. Deferred to a later phase.
 - **CommonJS-only files** (`module.exports`/`require()`) show 0 imports/exports and contribute no graph edges — they'll typically surface as false-positive orphans even when actually used, and as disconnected nodes in `--graph` output. The `fixtures/basic-react-app/src/legacyHelper.js` fixture demonstrates this deliberately. Treating `require("./x")` calls as file-level edges (without full CommonJS export/symbol modeling) would be a cheap, worthwhile follow-up — deferred for now since no current fixture case exercises it.
 - **`tsconfig.json` `exports` field**: only the top-level `"."` entry is resolved; full conditional-exports maps are not.
 
@@ -152,6 +188,30 @@ The Explorer's node set includes every scanned file, including orphans with zero
 - **CommonJS files render as disconnected nodes** in the Explorer graph, same root cause as the Phase 1/2 CommonJS limitation above.
 - **`npm audit` flags a moderate esbuild advisory** (via Vite's dev server, which allows cross-origin requests to read its responses) in `web/`'s dev dependencies. It affects `vite dev`/`npm run dev --workspace=web` only — the *built* static bundle `--serve` actually ships has no dev server in it. Not force-upgraded to Vite 8 yet since that's a breaking change; worth revisiting later.
 
+## Known Phase 6 limitations
+
+- **npm/yarn workspaces only** — `pnpm-workspace.yaml` isn't parsed. A hand-rolled YAML parser risked
+  silently producing a wrong package set on a malformed/partial parse, which is worse than the
+  current safe failure mode (pnpm monorepos are simply scanned as a single flat project, same as
+  before this phase). Deferred, not attempted.
+- **Root-only detection, no ancestor walk** — see "Monorepo support" above.
+- **Workspace glob patterns**: only a single trailing `*` segment (`"packages/*"`) is expanded.
+  `**`, mid-path wildcards, and brace expansion aren't supported — every real workspace field
+  observed in practice is a short literal list or a single `dir/*` pattern, so this covers the
+  realistic cases without a real glob dependency. A literal directory with no wildcard also works.
+- **No per-package `tsconfig.json`/`.gitignore` merging** — only the invoked root's own `tsconfig.json`
+  `paths` and `.gitignore` are honored; a package's own `tsconfig.json` path aliases aren't merged in.
+  Full TS project-references resolution is out of scope for "basic" support.
+- **Bare cross-package imports** (`import {x} from "@myorg/lib"`, with no `tsconfig` `paths` alias)
+  only resolve after `npm install` has created the `node_modules` symlinks — before install, or
+  without a `paths` alias, the edge is silently dropped rather than guessed at.
+- **Named imports through a re-export barrel aren't attributed in `imports`/`ImportEdge`** (e.g.
+  `import { greet } from "@scope/lib"` where `@scope/lib`'s `index.ts` does `export * from
+  "./greet"`): the file-level edge and the `calls`/`renders` usage edge are still emitted correctly
+  (connectivity isn't lost), only the specific "this file imports this named symbol" attribution is
+  missing when it's routed through a barrel. This is a pre-existing Phase 2 gap, not new to monorepo
+  support — it's simply the first case that exercises a re-export barrel across a package boundary.
+
 ## Project layout
 
 `analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). `graph.ts`'s `findDependents` (a BFS over the reversed dependency graph) and `entrypoints.ts`'s `computeRoutes` feed `orchestrator.runImpactAnalysis()`/`loadImpactContext()` (`--impact`, and a per-request `/api/impact` for the Explorer — the one endpoint that isn't computed once at server startup, since its result depends on which file was clicked). This split is deliberate — `orchestrator.ts`'s entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`/`runImpactAnalysis`) are the only things any consumer (CLI, server, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
@@ -162,6 +222,6 @@ The Explorer's node set includes every scanned file, including orphans with zero
 npm test
 ```
 
-Runs `node:test` against `graph.ts` (including `findCyclePath`/`findDependents`), `analyzer.ts`'s `getCyclomaticComplexity`, `entrypoints.ts`'s `computeRoutes`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`/`formatImpactReport`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`/`runImpactAnalysis`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points (including `about.tsx`'s import of a shared util, giving `--impact` a real affected-route case to assert against), a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`). `npm test` never requires `web/` to be built first.
+Runs `node:test` against `graph.ts` (including `findCyclePath`/`findDependents`), `analyzer.ts`'s `getCyclomaticComplexity`, `entrypoints.ts`'s `computeRoutes`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`/`formatImpactReport`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`/`runImpactAnalysis`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points (including `about.tsx`'s import of a shared util, giving `--impact` a real affected-route case to assert against), a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`), plus `workspace.ts`'s workspace-detection primitives and a second integration suite against `fixtures/basic-monorepo` (a 2-package npm workspace with a cross-package `tsconfig` path alias) asserting the orphan-misreporting regression is actually fixed. `npm test` never requires `web/` to be built first.
 
 The Explorer frontend (`web/`) has no automated tests — the project has no UI-render test infrastructure prior to this, and the fixture's known cycles/orphan/entry-points make it a good manual test bed. Verify frontend changes by running `codeatlas ./fixtures/basic-react-app --serve` and checking the result in a browser, not just `tsc`/`vite build` succeeding.

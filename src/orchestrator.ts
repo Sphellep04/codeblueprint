@@ -14,6 +14,7 @@ import {
 import { countComponents } from "./componentHeuristics";
 import { buildGraph, inDegrees, findCycles, findCyclePath, findDependentsFromReverse, reverseGraph, DependencyGraph } from "./graph";
 import { computeEntryPoints, computeRoutes } from "./entrypoints";
+import { detectWorkspace } from "./workspace";
 import { buildCodeGraph, buildFileEdges } from "./codeGraph";
 import { buildModuleMetrics } from "./modules";
 import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge } from "./model";
@@ -34,7 +35,7 @@ function resolveProjectName(rootAbs: string): string {
   return path.basename(rootAbs);
 }
 
-function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFile[] } {
+function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFile[]; packageRoots: string[] } {
   const rootAbs = path.resolve(rootDir);
 
   if (!fs.existsSync(rootAbs)) {
@@ -51,12 +52,21 @@ function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFil
     throw new CodeAtlasError(`no JavaScript/TypeScript source files found in "${rootDir}".`);
   }
 
-  return { rootAbs, sourceFiles };
+  // rootAbs's own scan already picks up every nested workspace package's files (the glob is
+  // recursive and isInternalDependency's boundary already covers anything under rootAbs) — the one
+  // thing workspace detection actually changes is which directories count as package roots for
+  // entry-point purposes (see entrypoints.ts's computeEntryPoints), so a workspace package's own
+  // index/package.json-main file isn't misreported as an orphan just because it isn't importable
+  // from anywhere else and isn't nested under rootAbs's own package.json.
+  const workspacePackages = detectWorkspace(rootAbs);
+  const packageRoots = workspacePackages ? [rootAbs, ...workspacePackages] : [rootAbs];
+
+  return { rootAbs, sourceFiles, packageRoots };
 }
 
-function buildFileModels(rootAbs: string, sourceFiles: SourceFile[]): FileModel[] {
+function buildFileModels(rootAbs: string, sourceFiles: SourceFile[], packageRoots: string[]): FileModel[] {
   const filePaths = sourceFiles.map((sf) => sf.getFilePath());
-  const entryPoints = computeEntryPoints(rootAbs, filePaths);
+  const entryPoints = computeEntryPoints(rootAbs, filePaths, packageRoots);
 
   return sourceFiles.map((sf) => {
     const functionCandidates = getFunctionCandidates(sf);
@@ -100,8 +110,8 @@ interface ProjectContext {
 }
 
 function buildProjectContext(rootDir: string): ProjectContext {
-  const { rootAbs, sourceFiles } = loadProject(rootDir);
-  return { rootAbs, projectName: resolveProjectName(rootAbs), sourceFiles, files: buildFileModels(rootAbs, sourceFiles) };
+  const { rootAbs, sourceFiles, packageRoots } = loadProject(rootDir);
+  return { rootAbs, projectName: resolveProjectName(rootAbs), sourceFiles, files: buildFileModels(rootAbs, sourceFiles, packageRoots) };
 }
 
 export function buildProjectModel(rootDir: string): ProjectModel {
