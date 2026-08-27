@@ -8,6 +8,7 @@ import SearchBox from "./components/SearchBox";
 import InspectPanel from "./components/InspectPanel";
 import HotspotsPanel from "./components/HotspotsPanel";
 import OverviewPanel from "./components/OverviewPanel";
+import CommandPalette from "./components/CommandPalette";
 import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
 
 type LoadState =
@@ -24,6 +25,8 @@ export default function App() {
   const [view, setView] = useState<View>("overview");
   const [impact, setImpact] = useState<ImpactReport | null>(null);
   const [hideReExports, setHideReExports] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Guards against a stale /api/impact response: if the user re-selects (or searches) before an
   // in-flight "Show impact" fetch resolves, the late response must not overwrite the newer state.
@@ -78,6 +81,48 @@ export default function App() {
 
   const onViewHotspots = useCallback(() => setView("hotspots"), []);
 
+  const onNavigateToSymbolFile = useCallback(
+    (path: string) => {
+      onSelect(path);
+      setView("symbols");
+    },
+    [onSelect]
+  );
+
+  // Global shortcuts: Cmd/Ctrl+K always works (standard command-palette convention, even while
+  // typing elsewhere); the single-letter shortcuts only fire outside of text inputs so they never
+  // hijack normal typing in the search box or the palette's own input.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+      if (paletteOpen || isTyping) return;
+
+      if (e.key === "/") {
+        e.preventDefault();
+        setView("graph");
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      } else if (e.key === "g") {
+        setView("graph");
+      } else if (e.key === "s") {
+        setView("symbols");
+      } else if (e.key === "h") {
+        setView("hotspots");
+      } else if (e.key === "o") {
+        setView("overview");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [paletteOpen]);
+
   if (state.status === "loading") {
     return <div className="app-placeholder">Loading…</div>;
   }
@@ -116,7 +161,7 @@ export default function App() {
               Hide re-exports
             </label>
           )}
-          {view === "graph" && <SearchBox value={searchTerm} onChange={onSearchChange} />}
+          {view === "graph" && <SearchBox ref={searchInputRef} value={searchTerm} onChange={onSearchChange} />}
         </div>
       </header>
       {view === "overview" ? (
@@ -149,6 +194,16 @@ export default function App() {
             onOpenSource={onOpenSource}
           />
         </div>
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          files={data.files}
+          symbols={codeGraph.symbols}
+          rootDir={data.rootDir}
+          onSelectFile={onNavigateToFile}
+          onSelectSymbolFile={onNavigateToSymbolFile}
+          onClose={() => setPaletteOpen(false)}
+        />
       )}
     </div>
   );

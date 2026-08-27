@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import type { ExplorerData, ImpactReport, CodeGraph, HotspotReport } from "../types";
 import { relativePath } from "../lib/paths";
@@ -6,6 +6,7 @@ import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
 import { incomingEdgeCount } from "../lib/metrics";
 import Legend from "./Legend";
 import ImpactBanner from "./ImpactBanner";
+import Minimap from "./Minimap";
 
 interface GraphViewProps {
   data: ExplorerData;
@@ -108,6 +109,10 @@ const STYLE: cytoscape.StylesheetStyle[] = [
 export default function GraphView({ data, codeGraph, hotspots, selectedPath, searchTerm, impact, onSelect, hideReExports }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  // Mirrors cyRef into state purely so the Minimap (a child, rendered from this same return) gets a
+  // re-render once the instance exists — refs alone don't trigger that. Every other effect below
+  // still reads cyRef.current directly; they don't need the extra re-render this causes.
+  const [cyForMinimap, setCyForMinimap] = useState<cytoscape.Core | null>(null);
 
   // Rebuild the graph whenever the underlying data changes (once per page load for the MVP).
   useEffect(() => {
@@ -146,9 +151,11 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
     cy.on("tap", "node", (evt) => onSelect(evt.target.id()));
 
     cyRef.current = cy;
+    setCyForMinimap(cy);
     return () => {
       cy.destroy();
       cyRef.current = null;
+      setCyForMinimap(null);
     };
   }, [data, codeGraph, hotspots, onSelect]);
 
@@ -217,6 +224,7 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
     <div className="graph-view">
       <div ref={containerRef} className="graph-canvas" />
       <Legend items={LEGEND_ITEMS} />
+      <Minimap cy={cyForMinimap} />
       {impact && <ImpactBanner impact={impact} rootDir={data.rootDir} modules={hotspots.modules} />}
     </div>
   );

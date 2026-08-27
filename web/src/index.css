@@ -181,6 +181,103 @@ body {
   border-radius: 50%;
 }
 
+.minimap {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  background: color-mix(in srgb, var(--cb-surface) 85%, transparent);
+  border: 1px solid var(--cb-border);
+  border-radius: 6px;
+  cursor: crosshair;
+}
+
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  z-index: 100;
+}
+
+.command-palette {
+  width: 100%;
+  max-width: 560px;
+  background: var(--cb-surface);
+  border: 1px solid var(--cb-border);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.command-palette-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.9rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cb-border);
+  color: var(--cb-text);
+  outline: none;
+}
+
+.command-palette-results {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.command-palette-empty {
+  padding: 0.75rem;
+  color: var(--cb-text-dim);
+  font-size: 0.85rem;
+}
+
+.command-palette-result {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.command-palette-result--active {
+  background: color-mix(in srgb, var(--cb-blue) 20%, transparent);
+}
+
+.command-palette-result-kind {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--cb-text-dim);
+  width: 46px;
+}
+
+.command-palette-result-label {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-result-detail {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--cb-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .impact-banner {
   position: absolute;
   left: 50%;

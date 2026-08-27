@@ -1,11 +1,14 @@
+import { forwardRef } from "react";
+
 interface SearchBoxProps {
   value: string;
   onChange: (value: string) => void;
 }
 
-export default function SearchBox({ value, onChange }: SearchBoxProps) {
+const SearchBox = forwardRef<HTMLInputElement, SearchBoxProps>(function SearchBox({ value, onChange }, ref) {
   return (
     <input
+      ref={ref}
       type="search"
       className="search-box"
       placeholder="Search files…"
@@ -13,4 +16,6 @@ export default function SearchBox({ value, onChange }: SearchBoxProps) {
       onChange={(e) => onChange(e.target.value)}
     />
   );
-}
+});
+
+export default SearchBox;
