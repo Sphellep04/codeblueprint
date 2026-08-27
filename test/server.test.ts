@@ -65,7 +65,7 @@ test("GET /api/impact?file=<known file> returns the ImpactReport shape", async (
 test("GET /api/impact-summary (a look-alike path) is not swallowed by the /api/impact handler", async () => {
   // /api/impact must match exactly (or with a "?" query boundary) — a prefix match here would
   // incorrectly claim any future/typo'd path that merely starts with "/api/impact".
-  const missingUiDir = path.join(os.tmpdir(), "codeatlas-no-such-ui-dir-" + Date.now());
+  const missingUiDir = path.join(os.tmpdir(), "codeblueprint-no-such-ui-dir-" + Date.now());
   await withServer(missingUiDir, async (baseUrl) => {
     const res = await fetch(`${baseUrl}/api/impact-summary`);
     assert.notEqual(res.status, 400); // the impact handler's "missing file param" response
@@ -95,7 +95,7 @@ test("with no UI build present, static requests respond 500 with a clear message
   // A path guaranteed not to exist — passing `undefined` here wouldn't reliably test this, since a
   // parameter explicitly passed as `undefined` still triggers createServer's default (the real,
   // auto-detected uiDir), which may legitimately exist in this environment after `npm run build`.
-  const missingUiDir = path.join(os.tmpdir(), "codeatlas-no-such-ui-dir-" + Date.now());
+  const missingUiDir = path.join(os.tmpdir(), "codeblueprint-no-such-ui-dir-" + Date.now());
   await withServer(missingUiDir, async (baseUrl) => {
     const res = await fetch(`${baseUrl}/`);
     assert.equal(res.status, 500);
@@ -104,7 +104,7 @@ test("with no UI build present, static requests respond 500 with a clear message
 });
 
 test("static serving: known asset extensions serve with the correct content-type", async () => {
-  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-ui-test-"));
+  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-ui-test-"));
   fs.writeFileSync(path.join(uiDir, "index.html"), "<html><body>Explorer</body></html>");
   fs.writeFileSync(path.join(uiDir, "style.css"), "body { margin: 0; }");
 
@@ -121,7 +121,7 @@ test("static serving: known asset extensions serve with the correct content-type
 });
 
 test("static serving: an extensionless route falls back to index.html (SPA routing)", async () => {
-  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-ui-test-"));
+  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-ui-test-"));
   fs.writeFileSync(path.join(uiDir, "index.html"), "<html><body>Explorer shell</body></html>");
 
   await withServer(uiDir, async (baseUrl) => {
@@ -132,7 +132,7 @@ test("static serving: an extensionless route falls back to index.html (SPA routi
 });
 
 test("static serving: a missing asset with a real extension 404s rather than falling back", async () => {
-  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-ui-test-"));
+  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-ui-test-"));
   fs.writeFileSync(path.join(uiDir, "index.html"), "<html></html>");
 
   await withServer(uiDir, async (baseUrl) => {
@@ -142,7 +142,7 @@ test("static serving: a missing asset with a real extension 404s rather than fal
 });
 
 test("static serving: a malformed percent-encoded path doesn't crash the server", async () => {
-  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-ui-test-"));
+  const uiDir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-ui-test-"));
   fs.writeFileSync(path.join(uiDir, "index.html"), "<html><body>shell</body></html>");
 
   await withServer(uiDir, async (baseUrl) => {

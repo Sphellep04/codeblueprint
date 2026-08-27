@@ -1,16 +1,16 @@
 {
-  "name": "codeatlas",
+  "name": "codeblueprint",
   "version": "1.0.0",
   "description": "CLI tool for structural analysis of JavaScript/TypeScript/React/Next.js codebases",
   "license": "MIT",
   "author": "Phellep Shapopi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Sphellep04/codeatlas.git"
+    "url": "git+https://github.com/Sphellep04/codeblueprint.git"
   },
-  "homepage": "https://github.com/Sphellep04/codeatlas#readme",
+  "homepage": "https://github.com/Sphellep04/codeblueprint#readme",
   "bugs": {
-    "url": "https://github.com/Sphellep04/codeatlas/issues"
+    "url": "https://github.com/Sphellep04/codeblueprint/issues"
   },
   "keywords": [
     "cli",
@@ -22,7 +22,7 @@
     "nextjs"
   ],
   "bin": {
-    "codeatlas": "dist/cli.js"
+    "codeblueprint": "dist/cli.js"
   },
   "main": "dist/cli.js",
   "files": [

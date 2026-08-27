@@ -2,7 +2,7 @@ import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import { exec } from "child_process";
-import { loadServerData, CodeAtlasError } from "./orchestrator";
+import { loadServerData, CodeBlueprintError } from "./orchestrator";
 
 export const DEFAULT_PORT = 4787;
 
@@ -50,7 +50,7 @@ function safeJoin(uiDir: string, urlPath: string): string | undefined {
 function serveStatic(uiDir: string | undefined, urlPath: string, res: http.ServerResponse): void {
   if (!uiDir || !fs.existsSync(uiDir)) {
     res.writeHead(500, { "Content-Type": "text/plain" });
-    res.end("CodeAtlas Explorer UI assets not found — run `npm run build` first.");
+    res.end("CodeBlueprint Explorer UI assets not found — run `npm run build` first.");
     return;
   }
 
@@ -127,7 +127,7 @@ export function createServer(rootDir: string, uiDir: string | undefined = resolv
       try {
         report = computeImpact(file);
       } catch (err) {
-        if (err instanceof CodeAtlasError) {
+        if (err instanceof CodeBlueprintError) {
           res.writeHead(404, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: err.message }));
           return;
@@ -167,7 +167,7 @@ export function startServer(rootDir: string, port: number = DEFAULT_PORT): void 
 
   server.listen(port, () => {
     const url = `http://localhost:${port}`;
-    process.stdout.write(`CodeAtlas Explorer running at ${url}\n`);
+    process.stdout.write(`CodeBlueprint Explorer running at ${url}\n`);
     openBrowser(url);
   });
 }

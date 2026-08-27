@@ -76,7 +76,7 @@ export default function App() {
     <div className="app-layout">
       <header className="app-header">
         <span>
-          CodeAtlas Explorer — {data.projectName} ({data.files.length} files, {data.edges.length} edges)
+          CodeBlueprint Explorer — {data.projectName} ({data.files.length} files, {data.edges.length} edges)
         </span>
         <div className="app-header-controls">
           <div className="view-toggle" role="tablist">

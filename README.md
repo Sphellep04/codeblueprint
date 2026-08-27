@@ -1,4 +1,4 @@
-# CodeAtlas
+# CodeBlueprint
 
 Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structural summary, a relationship graph, and a local web Explorer to browse it visually.
 
@@ -12,7 +12,7 @@ Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structu
 ## Quick start
 
 ```
-npx codeatlas ./my-project
+npx codeblueprint ./my-project
 ```
 
 No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotspots`/`--impact`/`--serve` per the flags below.
@@ -20,13 +20,13 @@ No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotsp
 ## Usage
 
 ```
-codeatlas <path>
-codeatlas <path> --json
-codeatlas <path> --graph
-codeatlas <path> --hotspots [--json]
-codeatlas <path> --impact <file> [--json]
-codeatlas <path> --serve [--port <number>]
-codeatlas --version
+codeblueprint <path>
+codeblueprint <path> --json
+codeblueprint <path> --graph
+codeblueprint <path> --hotspots [--json]
+codeblueprint <path> --impact <file> [--json]
+codeblueprint <path> --serve [--port <number>]
+codeblueprint --version
 ```
 
 ## Local development
@@ -34,8 +34,8 @@ codeatlas --version
 ```
 npm install
 npm run build
-npm link          # makes `codeatlas`/`npx codeatlas` resolve to this local build
-codeatlas ./my-project
+npm link          # makes `codeblueprint`/`npx codeblueprint` resolve to this local build
+codeblueprint ./my-project
 ```
 
 `npm install` also installs the `web/` Explorer frontend's dependencies (it's an npm workspace), and `npm run build` builds both the CLI and `web/`, copying the built Explorer into `dist/ui` so `--serve` has something to serve. See "Explorer (`--serve`)" below for the frontend dev workflow.
@@ -45,7 +45,7 @@ Or without linking: `node dist/cli.js ./my-project`, or `npm run dev -- ./my-pro
 ## Output
 
 ```
-CodeAtlas
+CodeBlueprint
 
 Project: my-project
 
@@ -67,8 +67,8 @@ Orphan files        8
 ## Architecture intelligence (`--hotspots`)
 
 ```
-codeatlas ./my-project --hotspots
-codeatlas ./my-project --hotspots --json
+codeblueprint ./my-project --hotspots
+codeblueprint ./my-project --hotspots --json
 ```
 
 Prints (or, with `--json`, returns as a `HotspotReport` object) three things `--graph`'s raw edge
@@ -95,8 +95,8 @@ already does for `Summary`), and is mutually exclusive with `--graph`/`--serve` 
 ## Impact analysis (`--impact <file>`)
 
 ```
-codeatlas ./my-project --impact src/authService.ts
-codeatlas ./my-project --impact src/authService.ts --json
+codeblueprint ./my-project --impact src/authService.ts
+codeblueprint ./my-project --impact src/authService.ts --json
 ```
 
 The roadmap's signature feature: "Potential impact: N files" — the *full transitive* blast radius
@@ -109,7 +109,7 @@ impacted files that are actual application routes (Next.js `pages/**`/`app/**`, 
 `computeEntryPoints`, which also includes test/config files that aren't routes).
 
 `<file>` resolves relative to the project root (the `<path>` argument), not your shell's current
-directory, so the result doesn't depend on where you happen to run `codeatlas` from; absolute paths
+directory, so the result doesn't depend on where you happen to run `codeblueprint` from; absolute paths
 work too. A path that doesn't match any scanned file is a clear error, not a silent empty report.
 
 The result is deliberately a flat file list, not a depth-grouped tree — the Explorer's graph
@@ -121,8 +121,8 @@ exclusive with `--graph`/`--hotspots`/`--serve`.
 ## Explorer (`--serve`)
 
 ```
-codeatlas ./my-project --serve
-codeatlas ./my-project --serve --port 5000
+codeblueprint ./my-project --serve
+codeblueprint ./my-project --serve --port 5000
 ```
 
 Starts a local HTTP server (default port `4787`) and opens your browser to a graphical Explorer: a file-tree sidebar, a pan/zoom/click dependency graph (Cytoscape.js), a search box that highlights matching files and fades the rest, and an inspect panel showing the selected file's metrics (imports/exports/functions/classes/components/complexity, entry-point status, incoming/outgoing edge counts). A Graph/Hotspots toggle in the header switches to a second view — the same data `--hotspots` prints as text, rendered as a connected-files list, cycle chains, and per-module coupling/complexity/dependency bars (`web/src/components/HotspotsPanel.tsx`), served from a second `GET /api/hotspots` endpoint computed once at server startup alongside `/api/explorer-data`. A "Show impact" button in the inspect panel fetches `GET /api/impact?file=<path>` (computed per-request, since the target varies per click, unlike the whole-project endpoints above) and highlights the result directly on the graph — the target file gets a distinct border, its impacted dependents turn gold, everything else fades, reusing the exact same highlight mechanism the search box already uses (impact takes priority over search while active, and clears on reselection or a new search term, so the two never need to be reconciled at once). Unlike `--json`/`--graph`/`--hotspots`/`--impact`, `--serve` doesn't print anything machine-readable to stdout — it's meant to be looked at, not piped — so it's mutually exclusive with the other four (combining them is a usage error, not a silently-ignored combination).
@@ -131,11 +131,11 @@ The Explorer's node set includes every scanned file, including orphans with zero
 
 **MVP scope**: file-level graph only. The roadmap's further Phase 3 features — hiding edges by dependency type, "focus on this module," jump-from-graph-to-source, and a symbol/call-graph view (the data for the last one already exists via `--graph`, just not wired into the UI yet) — are deferred, not designed away: `FileEdge.kind` is already tagged in the graph data specifically so "hide re-export edges" is a future CSS class toggle, not a rework.
 
-**Frontend dev workflow**: the Explorer lives in `web/` (Vite + React + TypeScript + Cytoscape.js), a separate npm workspace from the CLI with its own `tsconfig.json` — it targets the browser (ESNext modules, DOM lib) where the CLI targets Node (CommonJS). `web/src/types.ts` is a small hand-kept mirror of the relevant `src/model.ts` types, since the two packages don't share a compilation context. To iterate on the UI with hot reload: run `codeatlas <path> --serve` in one terminal (serves the API on port 4787), then `npm run dev --workspace=web` in another (`web/vite.config.ts` proxies `/api` to port 4787).
+**Frontend dev workflow**: the Explorer lives in `web/` (Vite + React + TypeScript + Cytoscape.js), a separate npm workspace from the CLI with its own `tsconfig.json` — it targets the browser (ESNext modules, DOM lib) where the CLI targets Node (CommonJS). `web/src/types.ts` is a small hand-kept mirror of the relevant `src/model.ts` types, since the two packages don't share a compilation context. To iterate on the UI with hot reload: run `codeblueprint <path> --serve` in one terminal (serves the API on port 4787), then `npm run dev --workspace=web` in another (`web/vite.config.ts` proxies `/api` to port 4787).
 
 ## Monorepo support
 
-Point `<path>` at a monorepo's root and CodeAtlas automatically detects an npm/yarn workspace (a
+Point `<path>` at a monorepo's root and CodeBlueprint automatically detects an npm/yarn workspace (a
 `"workspaces"` field in the root `package.json`, either the plain array form or yarn's `{"packages":
 [...]}` object form) and scans every discovered package as part of the same project — no flag needed,
 the same way `tsconfig.json`/`.gitignore` are already picked up automatically. This fixes the biggest
@@ -146,8 +146,8 @@ recognized too (`entrypoints.ts`'s `computeEntryPoints`, via a `packageRoots` pa
 else — `--graph`, `--hotspots`, `--impact`, `--serve` — works across package boundaries for free once
 an edge exists, since none of them are aware a package boundary was ever crossed.
 
-Detection is root-only: run `codeatlas` against the monorepo's actual root, not a single package's
-own subdirectory nested inside a larger workspace — CodeAtlas doesn't walk upward looking for an
+Detection is root-only: run `codeblueprint` against the monorepo's actual root, not a single package's
+own subdirectory nested inside a larger workspace — CodeBlueprint doesn't walk upward looking for an
 ancestor workspace.
 
 ## Metrics — what's actually counted
@@ -224,4 +224,4 @@ npm test
 
 Runs `node:test` against `graph.ts` (including `findCyclePath`/`findDependents`), `analyzer.ts`'s `getCyclomaticComplexity`, `entrypoints.ts`'s `computeRoutes`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`/`formatImpactReport`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`/`runImpactAnalysis`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points (including `about.tsx`'s import of a shared util, giving `--impact` a real affected-route case to assert against), a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`), plus `workspace.ts`'s workspace-detection primitives and a second integration suite against `fixtures/basic-monorepo` (a 2-package npm workspace with a cross-package `tsconfig` path alias) asserting the orphan-misreporting regression is actually fixed. `npm test` never requires `web/` to be built first.
 
-The Explorer frontend (`web/`) has no automated tests — the project has no UI-render test infrastructure prior to this, and the fixture's known cycles/orphan/entry-points make it a good manual test bed. Verify frontend changes by running `codeatlas ./fixtures/basic-react-app --serve` and checking the result in a browser, not just `tsc`/`vite build` succeeding.
+The Explorer frontend (`web/`) has no automated tests — the project has no UI-render test infrastructure prior to this, and the fixture's known cycles/orphan/entry-points make it a good manual test bed. Verify frontend changes by running `codeblueprint ./fixtures/basic-react-app --serve` and checking the result in a browser, not just `tsc`/`vite build` succeeding.

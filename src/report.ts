@@ -24,7 +24,7 @@ export function formatReport(summary: Summary): string {
   const groupBLines = formatted.slice(groupA.length);
 
   return [
-    "CodeAtlas",
+    "CodeBlueprint",
     "",
     `Project: ${summary.projectName}`,
     "",
@@ -52,7 +52,7 @@ function relativeToRoot(absolutePath: string, rootDir: string): string {
 }
 
 export function formatHotspotReport(report: HotspotReport): string {
-  const lines: string[] = ["CodeAtlas — Architecture Intelligence", "", `Project: ${report.projectName}`, "", "Most connected files"];
+  const lines: string[] = ["CodeBlueprint — Architecture Intelligence", "", `Project: ${report.projectName}`, "", "Most connected files"];
 
   if (report.hotspots.length === 0) {
     lines.push("  (none)");
@@ -96,7 +96,7 @@ export function formatImpactReport(report: ImpactReport): string {
   const routeCount = report.impactedRoutes.length;
 
   const lines: string[] = [
-    "CodeAtlas — Impact Analysis",
+    "CodeBlueprint — Impact Analysis",
     "",
     `Project: ${report.projectName}`,
     `Target: ${target}`,

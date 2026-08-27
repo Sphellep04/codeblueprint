@@ -40,7 +40,7 @@ function toPosix(value: string): string {
 }
 
 test("computeEntryPoints: without packageRoots, a sibling package's own index file is NOT recognized (default-parameter baseline)", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-entrypoints-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-entrypoints-"));
   const rootAbs = path.resolve(dir);
   const appSrcDir = path.join(rootAbs, "packages", "app", "src");
   fs.mkdirSync(appSrcDir, { recursive: true });
@@ -52,7 +52,7 @@ test("computeEntryPoints: without packageRoots, a sibling package's own index fi
 });
 
 test("computeEntryPoints: with packageRoots, each workspace package's own index file is recognized as an entry point", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-entrypoints-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-entrypoints-"));
   const rootAbs = path.resolve(dir);
   const appRoot = path.join(rootAbs, "packages", "app");
   const libRoot = path.join(rootAbs, "packages", "lib");

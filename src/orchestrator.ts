@@ -20,7 +20,7 @@ import { buildModuleMetrics } from "./modules";
 import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge } from "./model";
 import { SourceFile } from "ts-morph";
 
-export class CodeAtlasError extends Error {}
+export class CodeBlueprintError extends Error {}
 
 function resolveProjectName(rootAbs: string): string {
   const pkgPath = path.join(rootAbs, "package.json");
@@ -39,17 +39,17 @@ function loadProject(rootDir: string): { rootAbs: string; sourceFiles: SourceFil
   const rootAbs = path.resolve(rootDir);
 
   if (!fs.existsSync(rootAbs)) {
-    throw new CodeAtlasError(`path "${rootDir}" does not exist.`);
+    throw new CodeBlueprintError(`path "${rootDir}" does not exist.`);
   }
   if (!fs.statSync(rootAbs).isDirectory()) {
-    throw new CodeAtlasError(`"${rootDir}" is not a directory.`);
+    throw new CodeBlueprintError(`"${rootDir}" is not a directory.`);
   }
 
   const project = createProject(rootAbs);
   const sourceFiles = scanSourceFiles(project, rootAbs);
 
   if (sourceFiles.length === 0) {
-    throw new CodeAtlasError(`no JavaScript/TypeScript source files found in "${rootDir}".`);
+    throw new CodeBlueprintError(`no JavaScript/TypeScript source files found in "${rootDir}".`);
   }
 
   // rootAbs's own scan already picks up every nested workspace package's files (the glob is
@@ -221,12 +221,12 @@ function buildImpactContextFrom(ctx: ProjectContext, graph: DependencyGraph): Im
 /**
  * Resolves a user-typed --impact path to one of the actually-scanned files. Relative paths
  * resolve against rootAbs (the project root the user already gave), not process.cwd(), so the
- * result doesn't depend on where codeatlas happens to be invoked from; path.resolve also collapses
+ * result doesn't depend on where codeblueprint happens to be invoked from; path.resolve also collapses
  * any ".."/"." segments regardless of whether the input was relative or absolute. Falls back to a
  * case-insensitive match if no exact match is found, since Windows/macOS's case-insensitive
  * filesystems mean a user-typed path can legitimately differ in case from the on-disk casing
  * ts-morph reports — only case itself is forgiven, not a genuinely different path. Throws
- * CodeAtlasError, not a silent empty report, when nothing matches at all.
+ * CodeBlueprintError, not a silent empty report, when nothing matches at all.
  */
 function resolveTargetFile(ctx: ImpactContext, targetFile: string): string {
   const normalized = path.resolve(ctx.rootAbs, targetFile).replace(/\\/g, "/");
@@ -234,7 +234,7 @@ function resolveTargetFile(ctx: ImpactContext, targetFile: string): string {
     ctx.files.find((f) => f.absolutePath === normalized) ??
     ctx.files.find((f) => f.absolutePath.toLowerCase() === normalized.toLowerCase());
   if (!match) {
-    throw new CodeAtlasError(`"${targetFile}" does not match a scanned file in this project (looked for "${normalized}").`);
+    throw new CodeBlueprintError(`"${targetFile}" does not match a scanned file in this project (looked for "${normalized}").`);
   }
   return match.absolutePath;
 }

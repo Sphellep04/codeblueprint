@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import * as path from "path";
-import { runImpactAnalysis, CodeAtlasError } from "../src/orchestrator";
+import { runImpactAnalysis, CodeBlueprintError } from "../src/orchestrator";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
 
@@ -53,8 +53,8 @@ test("runImpactAnalysis: relative and absolute target paths resolve to the same 
   assert.equal(relative.targetFile, absolute.targetFile);
 });
 
-test("runImpactAnalysis: a target that doesn't match any scanned file throws CodeAtlasError", () => {
-  assert.throws(() => runImpactAnalysis(FIXTURE, "src/does/not/exist.ts"), CodeAtlasError);
+test("runImpactAnalysis: a target that doesn't match any scanned file throws CodeBlueprintError", () => {
+  assert.throws(() => runImpactAnalysis(FIXTURE, "src/does/not/exist.ts"), CodeBlueprintError);
 });
 
 test("runImpactAnalysis: a mismatched-case path still resolves (case-insensitive fallback)", () => {

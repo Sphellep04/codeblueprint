@@ -44,7 +44,7 @@ test("buildFileEdges: drops an edge whose target isn't in the given sourceFiles 
   // via TS module resolution because they exist on disk). buildFileEdges must not emit an edge to
   // such a file, since every consumer (the Explorer's Cytoscape graph, notably) assumes every
   // edge's "to" is one of the nodes it already has — Cytoscape throws synchronously otherwise.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-dangling-edge-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-dangling-edge-"));
   const rootAbs = path.resolve(dir);
   fs.writeFileSync(path.join(dir, "a.ts"), `import { b } from "./b";\nb();\n`);
   fs.writeFileSync(path.join(dir, "b.ts"), `export function b() {}\n`);

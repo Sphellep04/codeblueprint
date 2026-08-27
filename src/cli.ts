@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Command, Option, InvalidArgumentError } from "commander";
-import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, CodeAtlasError } from "./orchestrator";
+import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, CodeBlueprintError } from "./orchestrator";
 import { printReport, printJson, printHotspotReport, printImpactReport } from "./report";
 import { startServer, DEFAULT_PORT } from "./server";
 
@@ -26,7 +26,7 @@ function readOwnVersion(): string {
 const program = new Command();
 
 program
-  .name("codeatlas")
+  .name("codeblueprint")
   .description("Codebase intelligence CLI — structural analysis of a JS/TS/React/Next.js project")
   .version(readOwnVersion())
   .argument("<path>", "path to the project to analyze")
@@ -46,7 +46,7 @@ program
       "hotspots",
     ])
   )
-  .addOption(new Option("--serve", "start a local web server with the CodeAtlas Explorer").conflicts(["json", "graph", "hotspots", "impact"]))
+  .addOption(new Option("--serve", "start a local web server with the CodeBlueprint Explorer").conflicts(["json", "graph", "hotspots", "impact"]))
   .addOption(new Option("--port <number>", `port for --serve (default ${DEFAULT_PORT})`).argParser(parsePort))
   .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; impact?: string; serve?: boolean; port?: number }) => {
     if (options.port !== undefined && !options.serve) {
@@ -77,7 +77,7 @@ program
         printReport(runAnalysis(targetPath));
       }
     } catch (err) {
-      if (err instanceof CodeAtlasError) {
+      if (err instanceof CodeBlueprintError) {
         process.stderr.write(`Error: ${err.message}\n`);
         process.exitCode = 1;
         return;

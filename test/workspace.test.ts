@@ -6,7 +6,7 @@ import * as path from "path";
 import { parseWorkspacePatterns, expandPattern, detectWorkspace } from "../src/workspace";
 
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "codeatlas-workspace-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "codeblueprint-workspace-test-"));
 }
 
 function writePackageJson(dir: string, contents: unknown): void {
