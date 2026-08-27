@@ -525,6 +525,48 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.blueprint-view {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.blueprint-canvas {
+  position: relative;
+}
+
+.blueprint-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.blueprint-box {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--cb-surface-alt);
+  border: 1.5px solid var(--cb-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.blueprint-box-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.blueprint-box-count {
+  font-size: 0.75rem;
+  color: var(--cb-text-dim);
+}
+
 .overview-panel {
   flex: 1;
   overflow: auto;

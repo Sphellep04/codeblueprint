@@ -10,6 +10,7 @@ import HotspotsPanel from "./components/HotspotsPanel";
 import OverviewPanel from "./components/OverviewPanel";
 import CommandPalette from "./components/CommandPalette";
 import ArchitectureView from "./components/ArchitectureView";
+import BlueprintView from "./components/BlueprintView";
 import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
 
 type LoadState =
@@ -17,7 +18,7 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; data: ExplorerData; hotspots: HotspotReport; codeGraph: CodeGraph };
 
-type View = "overview" | "graph" | "architecture" | "symbols" | "hotspots";
+type View = "overview" | "graph" | "architecture" | "blueprint" | "symbols" | "hotspots";
 
 export default function App() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -113,6 +114,8 @@ export default function App() {
         setView("graph");
       } else if (e.key === "a") {
         setView("architecture");
+      } else if (e.key === "b") {
+        setView("blueprint");
       } else if (e.key === "s") {
         setView("symbols");
       } else if (e.key === "h") {
@@ -154,6 +157,9 @@ export default function App() {
             <button type="button" className={view === "architecture" ? "active" : ""} onClick={() => setView("architecture")}>
               Architecture
             </button>
+            <button type="button" className={view === "blueprint" ? "active" : ""} onClick={() => setView("blueprint")}>
+              Blueprint
+            </button>
             <button type="button" className={view === "symbols" ? "active" : ""} onClick={() => setView("symbols")}>
               Symbols
             </button>
@@ -174,6 +180,8 @@ export default function App() {
         <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
       ) : view === "hotspots" ? (
         <HotspotsPanel data={hotspots} />
+      ) : view === "blueprint" ? (
+        <BlueprintView data={data} codeGraph={codeGraph} />
       ) : (
         <div className="app-body">
           {tree && <Sidebar tree={tree} selectedPath={selectedPath} onSelect={onSelect} />}

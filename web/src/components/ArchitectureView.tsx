@@ -3,7 +3,7 @@ import cytoscape from "cytoscape";
 import type { ExplorerData, CodeGraph } from "../types";
 import { relativePath } from "../lib/paths";
 import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
-import { classifyLayer, LAYER_ORDER, ArchitectureLayer } from "../lib/layer";
+import { classifyLayer, LAYER_ORDER, LAYER_COLOR } from "../lib/layer";
 import Legend from "./Legend";
 
 interface ArchitectureViewProps {
@@ -23,15 +23,6 @@ const KIND_COLOR: Record<FileKind, string> = {
   class: COLOR.purple,
   service: COLOR.cyan,
   utility: COLOR.utility,
-};
-
-const LAYER_COLOR: Record<ArchitectureLayer, string> = {
-  Presentation: COLOR.blue,
-  Application: COLOR.cyan,
-  Services: COLOR.purple,
-  Data: COLOR.amber,
-  Infrastructure: COLOR.utility,
-  Other: "#3a3f4b",
 };
 
 const LEGEND_ITEMS = LAYER_ORDER.map((layer) => ({ label: layer, color: LAYER_COLOR[layer] }));

@@ -27,3 +27,16 @@ export function classifyLayer(file: FileModel, codeGraph: CodeGraph): Architectu
 }
 
 export const LAYER_ORDER: ArchitectureLayer[] = ["Presentation", "Application", "Services", "Data", "Infrastructure", "Other"];
+
+// Shared across ArchitectureView and BlueprintView so the same layer always reads as the same
+// color everywhere in the app. Mirrors the app's design-token hex values (see GraphView.tsx's
+// comment for why Cytoscape/canvas/SVG rendering can't reference index.css's --cb-* custom
+// properties directly).
+export const LAYER_COLOR: Record<ArchitectureLayer, string> = {
+  Presentation: "#4d7fff",
+  Application: "#22d3ee",
+  Services: "#a78bfa",
+  Data: "#f5a524",
+  Infrastructure: "#6b7280",
+  Other: "#3a3f4b",
+};
