@@ -7,6 +7,7 @@ import SymbolGraphView from "./components/SymbolGraphView";
 import SearchBox from "./components/SearchBox";
 import InspectPanel from "./components/InspectPanel";
 import HotspotsPanel from "./components/HotspotsPanel";
+import OverviewPanel from "./components/OverviewPanel";
 import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
 
 type LoadState =
@@ -14,13 +15,13 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; data: ExplorerData; hotspots: HotspotReport; codeGraph: CodeGraph };
 
-type View = "graph" | "symbols" | "hotspots";
+type View = "overview" | "graph" | "symbols" | "hotspots";
 
 export default function App() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [view, setView] = useState<View>("graph");
+  const [view, setView] = useState<View>("overview");
   const [impact, setImpact] = useState<ImpactReport | null>(null);
   const [hideReExports, setHideReExports] = useState(false);
 
@@ -67,6 +68,16 @@ export default function App() {
     openInEditor(file, line).catch((err: unknown) => console.error("Failed to open in editor:", err));
   }, []);
 
+  const onNavigateToFile = useCallback(
+    (path: string) => {
+      onSelect(path);
+      setView("graph");
+    },
+    [onSelect]
+  );
+
+  const onViewHotspots = useCallback(() => setView("hotspots"), []);
+
   if (state.status === "loading") {
     return <div className="app-placeholder">Loading…</div>;
   }
@@ -86,6 +97,9 @@ export default function App() {
         </span>
         <div className="app-header-controls">
           <div className="view-toggle" role="tablist">
+            <button type="button" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>
+              Overview
+            </button>
             <button type="button" className={view === "graph" ? "active" : ""} onClick={() => setView("graph")}>
               Graph
             </button>
@@ -105,7 +119,9 @@ export default function App() {
           {view === "graph" && <SearchBox value={searchTerm} onChange={onSearchChange} />}
         </div>
       </header>
-      {view === "hotspots" ? (
+      {view === "overview" ? (
+        <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
+      ) : view === "hotspots" ? (
         <HotspotsPanel data={hotspots} />
       ) : (
         <div className="app-body">
