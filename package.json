@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "CLI tool for structural analysis of JavaScript/TypeScript/React/Next.js codebases",
   "license": "MIT",
-  "author": "",
+  "author": "Phellep Shapopi",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Sphellep04/codeatlas.git"
