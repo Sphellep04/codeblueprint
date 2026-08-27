@@ -1,10 +1,15 @@
 import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
-import type { ExplorerData, ImpactReport } from "../types";
+import type { ExplorerData, ImpactReport, CodeGraph, HotspotReport } from "../types";
 import { relativePath } from "../lib/paths";
+import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
+import { incomingEdgeCount } from "../lib/metrics";
+import Legend from "./Legend";
 
 interface GraphViewProps {
   data: ExplorerData;
+  codeGraph: CodeGraph;
+  hotspots: HotspotReport;
   selectedPath: string | null;
   searchTerm: string;
   impact: ImpactReport | null;
@@ -12,11 +17,48 @@ interface GraphViewProps {
   hideReExports: boolean;
 }
 
+// Cytoscape renders to <canvas>, not the DOM, so index.css's --cb-* custom properties aren't
+// reachable from its stylesheet — these mirror the same design-token hex values by hand; keep them
+// in sync if the tokens ever change.
+const COLOR = {
+  blue: "#4d7fff",
+  cyan: "#22d3ee",
+  amber: "#f5a524",
+  red: "#ef4444",
+  purple: "#a78bfa",
+  utility: "#6b7280",
+};
+
+const KIND_COLOR: Record<FileKind, string> = {
+  entry: COLOR.amber,
+  component: COLOR.blue,
+  class: COLOR.purple,
+  service: COLOR.cyan,
+  utility: COLOR.utility,
+};
+
+const MIN_SIZE = 10;
+const MAX_SIZE = 40;
+const SIZE_PER_INCOMING_EDGE = 3;
+
+const LEGEND_ITEMS = [
+  { label: "Entry point", color: KIND_COLOR.entry },
+  { label: "Component", color: KIND_COLOR.component },
+  { label: "Class", color: KIND_COLOR.class },
+  { label: "Service", color: KIND_COLOR.service },
+  { label: "Utility / function", color: KIND_COLOR.utility },
+  { label: "Circular dependency", color: COLOR.red, ring: true },
+];
+
 const STYLE: cytoscape.StylesheetStyle[] = [
   {
     selector: "node",
     style: {
       label: "data(label)",
+      shape: "data(shape)" as cytoscape.Css.Node["shape"],
+      "background-color": "data(color)",
+      width: "data(size)",
+      height: "data(size)",
       "font-size": 9,
       color: "#e6e6e6",
       "text-valign": "bottom",
@@ -26,21 +68,14 @@ const STYLE: cytoscape.StylesheetStyle[] = [
       "text-background-opacity": 0.55,
       "text-background-padding": "2px",
       "text-background-shape": "roundrectangle",
-      "background-color": "#6699ff",
-      width: 14,
-      height: 14,
     },
-  },
-  {
-    selector: "node[?isEntryPoint]",
-    style: { "background-color": "#ff9933", shape: "diamond" },
   },
   {
     selector: "edge",
     style: {
       width: 1,
-      "line-color": "#999",
-      "target-arrow-color": "#999",
+      "line-color": "#5c6470",
+      "target-arrow-color": "#5c6470",
       "target-arrow-shape": "triangle",
       "curve-style": "bezier",
       opacity: 0.6,
@@ -48,16 +83,19 @@ const STYLE: cytoscape.StylesheetStyle[] = [
   },
   { selector: 'edge[kind = "reExport"]', style: { "line-style": "dashed" } },
   { selector: ".hidden-edge", style: { display: "none" } },
-  { selector: ".faded", style: { opacity: 0.08 } },
-  { selector: ".highlighted", style: { "background-color": "#ffcc00" } },
-  // .impact-target comes after node:selected so it wins when both apply (the common case: a file
-  // is selected, then "Show impact" is clicked on it) — Cytoscape resolves same-specificity
-  // property conflicts by declaration order, later wins.
-  { selector: "node:selected", style: { "border-width": 3, "border-color": "#222" } },
-  { selector: ".impact-target", style: { "border-width": 3, "border-color": "#e63946" } },
+  { selector: ".faded", style: { opacity: 0.06 } },
+  { selector: ".highlighted", style: { "background-color": COLOR.amber } },
+  // Priority (later wins on a same-specificity conflict): highlighted < selected < in-cycle <
+  // impact-target. A cycle is an ambient structural danger signal, worth showing over mere
+  // selection; an active impact query is the user's current focus, so it always wins outright.
+  // Border widths scale with node size (mapData) rather than a fixed pixel value — a fixed 3px
+  // border on a 10px minimum-size node visually eats the entire node, drowning out its kind color.
+  { selector: "node:selected", style: { "border-width": "mapData(size, 10, 40, 1.5, 3)" as unknown as number, "border-color": COLOR.blue } },
+  { selector: ".in-cycle", style: { "border-width": "mapData(size, 10, 40, 1.5, 3)" as unknown as number, "border-color": COLOR.red } },
+  { selector: ".impact-target", style: { "border-width": "mapData(size, 10, 40, 2, 5)" as unknown as number, "border-color": COLOR.red } },
 ];
 
-export default function GraphView({ data, selectedPath, searchTerm, impact, onSelect, hideReExports }: GraphViewProps) {
+export default function GraphView({ data, codeGraph, hotspots, selectedPath, searchTerm, impact, onSelect, hideReExports }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -65,9 +103,25 @@ export default function GraphView({ data, selectedPath, searchTerm, impact, onSe
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const nodes: cytoscape.ElementDefinition[] = data.files.map((f) => ({
-      data: { id: f.absolutePath, label: relativePath(f.absolutePath, data.rootDir), isEntryPoint: f.isEntryPoint },
-    }));
+    const cycleFiles = new Set(hotspots.cycles.flatMap((c) => c.files));
+
+    const nodes: cytoscape.ElementDefinition[] = data.files.map((f) => {
+      const kind = classifyFileKind(f, codeGraph);
+      const size = Math.min(
+        MAX_SIZE,
+        Math.max(MIN_SIZE, MIN_SIZE + incomingEdgeCount(data.edges, f.absolutePath) * SIZE_PER_INCOMING_EDGE)
+      );
+      return {
+        data: {
+          id: f.absolutePath,
+          label: relativePath(f.absolutePath, data.rootDir),
+          shape: FILE_KIND_SHAPE[kind],
+          color: KIND_COLOR[kind],
+          size,
+        },
+        classes: cycleFiles.has(f.absolutePath) ? "in-cycle" : "",
+      };
+    });
     const edges: cytoscape.ElementDefinition[] = data.edges.map((e, i) => ({
       data: { id: `edge-${i}`, source: e.from, target: e.to, kind: e.kind },
     }));
@@ -86,7 +140,7 @@ export default function GraphView({ data, selectedPath, searchTerm, impact, onSe
       cy.destroy();
       cyRef.current = null;
     };
-  }, [data, onSelect]);
+  }, [data, codeGraph, hotspots, onSelect]);
 
   // Reflect external selection (e.g. a sidebar click) onto the graph.
   useEffect(() => {
@@ -134,5 +188,10 @@ export default function GraphView({ data, selectedPath, searchTerm, impact, onSe
     cy.edges().addClass("faded");
   }, [searchTerm, impact]);
 
-  return <div ref={containerRef} className="graph-view" />;
+  return (
+    <div className="graph-view">
+      <div ref={containerRef} className="graph-canvas" />
+      <Legend items={LEGEND_ITEMS} />
+    </div>
+  );
 }

@@ -113,6 +113,8 @@ export default function App() {
           {view === "graph" ? (
             <GraphView
               data={data}
+              codeGraph={codeGraph}
+              hotspots={hotspots}
               selectedPath={selectedPath}
               searchTerm={searchTerm}
               impact={impact}
