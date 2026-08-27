@@ -5,6 +5,7 @@ import { relativePath } from "../lib/paths";
 import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
 import { incomingEdgeCount } from "../lib/metrics";
 import Legend from "./Legend";
+import ImpactBanner from "./ImpactBanner";
 
 interface GraphViewProps {
   data: ExplorerData;
@@ -68,6 +69,12 @@ const STYLE: cytoscape.StylesheetStyle[] = [
       "text-background-opacity": 0.55,
       "text-background-padding": "2px",
       "text-background-shape": "roundrectangle",
+      // Smoothly animates opacity/border/background changes whenever a class like .faded or
+      // .highlighted is toggled, instead of the change snapping instantly — this alone gives the
+      // impact reveal (below) its "fade" without any manual per-property animation code.
+      "transition-property": "opacity, border-width, border-color, background-color",
+      "transition-duration": 0.3,
+      "transition-timing-function": "ease-out",
     },
   },
   {
@@ -79,6 +86,9 @@ const STYLE: cytoscape.StylesheetStyle[] = [
       "target-arrow-shape": "triangle",
       "curve-style": "bezier",
       opacity: 0.6,
+      "transition-property": "opacity",
+      "transition-duration": 0.3,
+      "transition-timing-function": "ease-out",
     },
   },
   { selector: 'edge[kind = "reExport"]', style: { "line-style": "dashed" } },
@@ -164,12 +174,27 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
       const impactedSet = new Set(impact.impactedFiles);
       cy.nodes().forEach((node) => {
         const id = node.id();
+        node.removeClass("highlighted");
         node.toggleClass("impact-target", id === impact.targetFile);
-        node.toggleClass("highlighted", impactedSet.has(id));
         node.toggleClass("faded", id !== impact.targetFile && !impactedSet.has(id));
       });
       cy.edges().addClass("faded");
-      return;
+
+      const target = cy.$id(impact.targetFile);
+      const baseSize = target.data("size") as number;
+      // A brief pulse draws the eye to the target the instant impact analysis starts.
+      target.stop(true).animate({ style: { width: baseSize * 1.8, height: baseSize * 1.8 } }, { duration: 220, easing: "ease-out" });
+      target.animate({ style: { width: baseSize, height: baseSize } }, { duration: 220, easing: "ease-in" });
+
+      // impact.impactedFiles is produced by graph.ts's findDependentsFromReverse, a plain
+      // queue-based BFS — its return order is therefore already hop-distance order (closest
+      // dependents first). Revealing in that order, staggered, turns the flat list into a visible
+      // cascade outward from the target. If that BFS is ever rewritten to not preserve visitation
+      // order, this stagger silently stops matching hop distance — worth re-checking here first.
+      const timers = impact.impactedFiles.map((id, i) =>
+        window.setTimeout(() => cy.$id(id).addClass("highlighted"), 300 + i * 60)
+      );
+      return () => timers.forEach((t) => window.clearTimeout(t));
     }
 
     cy.elements().removeClass("impact-target");
@@ -192,6 +217,7 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
     <div className="graph-view">
       <div ref={containerRef} className="graph-canvas" />
       <Legend items={LEGEND_ITEMS} />
+      {impact && <ImpactBanner impact={impact} rootDir={data.rootDir} modules={hotspots.modules} />}
     </div>
   );
 }

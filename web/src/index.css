@@ -181,6 +181,32 @@ body {
   border-radius: 50%;
 }
 
+.impact-banner {
+  position: absolute;
+  left: 50%;
+  top: 0.75rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.6rem 1.25rem;
+  background: color-mix(in srgb, var(--cb-surface) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cb-red) 50%, transparent);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.impact-banner-stat {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--cb-text);
+  white-space: nowrap;
+}
+
+.impact-banner-stat--risk {
+  color: var(--cb-red);
+}
+
 .inspect-panel {
   width: 280px;
   flex-shrink: 0;
