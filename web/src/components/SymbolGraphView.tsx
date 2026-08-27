@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import type { CodeGraph, SymbolModel } from "../types";
 import { relativePath } from "../lib/paths";
+import { traceCallChain } from "../lib/callChain";
 import Legend from "./Legend";
 
 interface SymbolGraphViewProps {
@@ -58,28 +59,47 @@ const STYLE: cytoscape.StylesheetStyle[] = [
 export default function SymbolGraphView({ codeGraph, selectedPath, rootDir, onOpenSource }: SymbolGraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const [tracedSymbolId, setTracedSymbolId] = useState<string | null>(null);
+
+  // A trace picked for one file's symbol makes no sense once the user selects a different file.
+  useEffect(() => {
+    setTracedSymbolId(null);
+  }, [selectedPath]);
+
+  const fileSymbols = selectedPath ? codeGraph.symbols.filter((s) => s.filePath === selectedPath) : [];
 
   useEffect(() => {
     if (!containerRef.current || !selectedPath) return;
 
     const symbolsById = new Map<string, SymbolModel>(codeGraph.symbols.map((s) => [s.id, s]));
-    const fileSymbols = codeGraph.symbols.filter((s) => s.filePath === selectedPath);
     const fileSymbolIds = new Set(fileSymbols.map((s) => s.id));
-    const relevantUsages = codeGraph.usages.filter((u) => fileSymbolIds.has(u.from) || fileSymbolIds.has(u.to));
 
-    const neighborIds = new Set<string>();
-    for (const usage of relevantUsages) {
-      if (!fileSymbolIds.has(usage.from)) neighborIds.add(usage.from);
-      if (!fileSymbolIds.has(usage.to)) neighborIds.add(usage.to);
+    let relevantSymbolIds: Set<string>;
+    let relevantUsages: CodeGraph["usages"];
+
+    if (tracedSymbolId) {
+      const chain = traceCallChain(codeGraph, tracedSymbolId);
+      relevantSymbolIds = new Set([tracedSymbolId, ...chain.symbolIds]);
+      relevantUsages = chain.edges;
+    } else {
+      relevantUsages = codeGraph.usages.filter((u) => fileSymbolIds.has(u.from) || fileSymbolIds.has(u.to));
+      relevantSymbolIds = new Set(fileSymbolIds);
+      for (const usage of relevantUsages) {
+        relevantSymbolIds.add(usage.from);
+        relevantSymbolIds.add(usage.to);
+      }
     }
 
-    const nodes: cytoscape.ElementDefinition[] = [
-      ...fileSymbols.map((s) => ({ data: { id: s.id, label: s.name, neighbor: false } })),
-      ...Array.from(neighborIds)
-        .map((id) => symbolsById.get(id))
-        .filter((s): s is SymbolModel => s !== undefined)
-        .map((s) => ({ data: { id: s.id, label: `${s.name} (${relativePath(s.filePath, rootDir)})`, neighbor: true } })),
-    ];
+    const nodes: cytoscape.ElementDefinition[] = Array.from(relevantSymbolIds)
+      .map((id) => symbolsById.get(id))
+      .filter((s): s is SymbolModel => s !== undefined)
+      .map((s) => ({
+        data: {
+          id: s.id,
+          label: fileSymbolIds.has(s.id) ? s.name : `${s.name} (${relativePath(s.filePath, rootDir)})`,
+          neighbor: !fileSymbolIds.has(s.id),
+        },
+      }));
     const edges: cytoscape.ElementDefinition[] = relevantUsages.map((u, i) => ({
       data: { id: `usage-${i}`, source: u.from, target: u.to, kind: u.kind },
     }));
@@ -101,7 +121,11 @@ export default function SymbolGraphView({ codeGraph, selectedPath, rootDir, onOp
       cy.destroy();
       cyRef.current = null;
     };
-  }, [codeGraph, selectedPath, rootDir, onOpenSource]);
+    // fileSymbols is derived fresh from codeGraph/selectedPath every render, so depending on it
+    // directly (rather than codeGraph+selectedPath) would be a stale-closure risk; the two already
+    // in the deps list below cover everything fileSymbols itself depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeGraph, selectedPath, rootDir, onOpenSource, tracedSymbolId]);
 
   if (!selectedPath) {
     return <div className="symbol-graph-view app-placeholder-inline">Select a file to see its symbol graph.</div>;
@@ -109,6 +133,21 @@ export default function SymbolGraphView({ codeGraph, selectedPath, rootDir, onOp
 
   return (
     <div className="symbol-graph-view">
+      <div className="symbol-graph-controls">
+        <select className="trace-select" value={tracedSymbolId ?? ""} onChange={(e) => setTracedSymbolId(e.target.value || null)}>
+          <option value="">Trace flow from…</option>
+          {fileSymbols.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {tracedSymbolId && (
+          <button type="button" className="trace-clear-button" onClick={() => setTracedSymbolId(null)}>
+            Clear trace
+          </button>
+        )}
+      </div>
       <div ref={containerRef} className="graph-canvas" />
       <Legend items={LEGEND_ITEMS} />
     </div>
