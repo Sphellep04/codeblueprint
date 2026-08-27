@@ -1,15 +1,32 @@
 :root {
-  color-scheme: light dark;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
+
+  /* CodeBlueprint design tokens — an opinionated, always-dark "architect's workspace" theme,
+     deliberately not following the OS's light/dark preference: the identity should look the same
+     regardless of the visiting machine's settings. */
+  --cb-bg: #0d0f14;
+  --cb-surface: #161922;
+  --cb-surface-alt: #1d212c;
+  --cb-border: rgba(255, 255, 255, 0.08);
+  --cb-text: #e8eaed;
+  --cb-text-dim: #9aa1ac;
+  --cb-blue: #4d7fff;
+  --cb-cyan: #22d3ee;
+  --cb-amber: #f5a524;
+  --cb-red: #ef4444;
+  --cb-purple: #a78bfa;
 }
 
 body {
   margin: 0;
+  background: var(--cb-bg);
+  color: var(--cb-text);
 }
 
 .app-placeholder {
   padding: 2rem;
+  color: var(--cb-text-dim);
 }
 
 .app-layout {
@@ -20,7 +37,8 @@ body {
 
 .app-header {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  background: var(--cb-surface);
+  border-bottom: 1px solid var(--cb-border);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -32,6 +50,10 @@ body {
   font: inherit;
   padding: 0.35rem 0.6rem;
   min-width: 220px;
+  background: var(--cb-surface-alt);
+  border: 1px solid var(--cb-border);
+  border-radius: 4px;
+  color: var(--cb-text);
 }
 
 .app-header-controls {
@@ -45,13 +67,14 @@ body {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
+  color: var(--cb-text-dim);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .view-toggle {
   display: flex;
-  border: 1px solid rgba(128, 128, 128, 0.4);
+  border: 1px solid var(--cb-border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -63,11 +86,12 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: inherit;
+  color: var(--cb-text-dim);
 }
 
 .view-toggle button.active {
-  background: rgba(80, 140, 255, 0.25);
+  background: color-mix(in srgb, var(--cb-blue) 25%, transparent);
+  color: var(--cb-text);
 }
 
 .app-body {
@@ -80,7 +104,8 @@ body {
   width: 260px;
   flex-shrink: 0;
   overflow-y: auto;
-  border-right: 1px solid rgba(128, 128, 128, 0.3);
+  background: var(--cb-surface);
+  border-right: 1px solid var(--cb-border);
   padding: 0.5rem 0;
 }
 
@@ -92,26 +117,63 @@ body {
 }
 
 .tree-item:hover {
-  background: rgba(128, 128, 128, 0.15);
+  background: var(--cb-surface-alt);
 }
 
 .tree-item--selected {
-  background: rgba(80, 140, 255, 0.25);
+  background: color-mix(in srgb, var(--cb-blue) 25%, transparent);
 }
 
 .tree-dir {
   font-weight: 600;
+  color: var(--cb-text-dim);
 }
 
 .graph-view,
 .symbol-graph-view {
   flex: 1;
   min-width: 0;
+  position: relative;
 }
 
 .app-placeholder-inline {
   padding: 1.5rem;
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
+}
+
+.graph-legend {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--cb-surface) 90%, transparent);
+  border: 1px solid var(--cb-border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--cb-text-dim);
+  pointer-events: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.legend-swatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--legend-color, var(--cb-blue));
+}
+
+.legend-swatch--ring {
+  background: transparent;
+  border: 2px solid var(--legend-color, var(--cb-red));
+  border-radius: 50%;
 }
 
 .inspect-panel {
@@ -119,11 +181,12 @@ body {
   flex-shrink: 0;
   overflow: auto;
   padding: 0.75rem 1rem;
-  border-left: 1px solid rgba(128, 128, 128, 0.3);
+  background: var(--cb-surface);
+  border-left: 1px solid var(--cb-border);
 }
 
 .inspect-empty {
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
 }
 
 .inspect-title {
@@ -137,7 +200,8 @@ body {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 3px;
-  background: rgba(255, 153, 51, 0.25);
+  background: color-mix(in srgb, var(--cb-amber) 25%, transparent);
+  color: var(--cb-amber);
   margin: 0 0 0.75rem;
 }
 
@@ -150,7 +214,7 @@ body {
 }
 
 .inspect-stats dt {
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
 }
 
 .inspect-stats dd {
@@ -167,32 +231,32 @@ body {
   margin-top: 1rem;
   padding: 0.4rem 0;
   border-radius: 4px;
-  color: inherit;
+  color: var(--cb-text);
   cursor: pointer;
 }
 
 .show-impact-button {
-  border: 1px solid rgba(230, 57, 70, 0.6);
-  background: rgba(230, 57, 70, 0.1);
+  border: 1px solid color-mix(in srgb, var(--cb-red) 60%, transparent);
+  background: color-mix(in srgb, var(--cb-red) 10%, transparent);
 }
 
 .show-impact-button:hover {
-  background: rgba(230, 57, 70, 0.2);
+  background: color-mix(in srgb, var(--cb-red) 20%, transparent);
 }
 
 .open-source-button {
-  border: 1px solid rgba(80, 140, 255, 0.6);
-  background: rgba(80, 140, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--cb-blue) 60%, transparent);
+  background: color-mix(in srgb, var(--cb-blue) 10%, transparent);
 }
 
 .open-source-button:hover {
-  background: rgba(80, 140, 255, 0.2);
+  background: color-mix(in srgb, var(--cb-blue) 20%, transparent);
 }
 
 .impact-result {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  border-top: 1px solid var(--cb-border);
   font-size: 0.85rem;
 }
 
@@ -221,7 +285,7 @@ body {
 }
 
 .hotspots-empty {
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
 }
 
 .hotspots-list,
@@ -237,11 +301,11 @@ body {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.25rem 0;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  border-bottom: 1px solid var(--cb-border);
 }
 
 .hotspots-count {
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -250,6 +314,7 @@ body {
   padding: 0.25rem 0;
   font-family: ui-monospace, monospace;
   font-size: 0.9rem;
+  color: var(--cb-red);
 }
 
 .module-list {
@@ -260,7 +325,8 @@ body {
 }
 
 .module-card {
-  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: var(--cb-surface-alt);
+  border: 1px solid var(--cb-border);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -280,19 +346,19 @@ body {
 }
 
 .bar-label {
-  color: rgba(128, 128, 128, 0.9);
+  color: var(--cb-text-dim);
 }
 
 .bar-track {
   height: 8px;
   border-radius: 4px;
-  background: rgba(128, 128, 128, 0.2);
+  background: var(--cb-surface-alt);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  background: rgba(80, 140, 255, 0.75);
+  background: var(--cb-blue);
 }
 
 .bar-value {
