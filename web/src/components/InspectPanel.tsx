@@ -1,5 +1,6 @@
 import type { FileEdge, FileModel, ImpactReport } from "../types";
 import { relativePath } from "../lib/paths";
+import { incomingEdgeCount, outgoingEdgeCount } from "../lib/metrics";
 
 interface InspectPanelProps {
   file: FileModel | undefined;
@@ -19,8 +20,8 @@ export default function InspectPanel({ file, edges, rootDir, impact, onShowImpac
     );
   }
 
-  const incoming = edges.filter((e) => e.to === file.absolutePath).length;
-  const outgoing = edges.filter((e) => e.from === file.absolutePath).length;
+  const incoming = incomingEdgeCount(edges, file.absolutePath);
+  const outgoing = outgoingEdgeCount(edges, file.absolutePath);
   const impactForThisFile = impact?.targetFile === file.absolutePath ? impact : null;
 
   return (
