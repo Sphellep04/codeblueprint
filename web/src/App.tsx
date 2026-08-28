@@ -9,6 +9,7 @@ import InspectPanel from "./components/InspectPanel";
 import HotspotsPanel from "./components/HotspotsPanel";
 import OverviewPanel from "./components/OverviewPanel";
 import CommandPalette from "./components/CommandPalette";
+import ShortcutsOverlay from "./components/ShortcutsOverlay";
 import ArchitectureView from "./components/ArchitectureView";
 import BlueprintView from "./components/BlueprintView";
 import Logo from "./components/Logo";
@@ -30,6 +31,7 @@ export default function App() {
   const [impact, setImpact] = useState<ImpactReport | null>(null);
   const [hideReExports, setHideReExports] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Guards against a stale /api/impact response: if the user re-selects (or searches) before an
@@ -101,6 +103,12 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((open) => !open);
+        setShortcutsOpen(false);
+        return;
+      }
+
+      if (e.key === "Escape" && shortcutsOpen) {
+        setShortcutsOpen(false);
         return;
       }
 
@@ -110,6 +118,13 @@ export default function App() {
       // simultaneously trigger the global view-switch shortcut for that same letter.
       const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
       if (paletteOpen || isTyping) return;
+
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen((open) => !open);
+        return;
+      }
+      if (shortcutsOpen) return;
 
       if (e.key === "/") {
         e.preventDefault();
@@ -132,7 +147,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paletteOpen]);
+  }, [paletteOpen, shortcutsOpen]);
 
   if (state.status === "loading") {
     return (
@@ -196,6 +211,15 @@ export default function App() {
             </label>
           )}
           {view === "graph" && <SearchBox ref={searchInputRef} value={searchTerm} onChange={onSearchChange} />}
+          <button
+            type="button"
+            className="shortcuts-trigger"
+            onClick={() => setShortcutsOpen((open) => !open)}
+            title="Keyboard shortcuts"
+            aria-label="Keyboard shortcuts"
+          >
+            ?
+          </button>
         </div>
       </header>
       {view === "blueprint" ? (
@@ -260,6 +284,7 @@ export default function App() {
           onClose={() => setPaletteOpen(false)}
         />
       )}
+      {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }
