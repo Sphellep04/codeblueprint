@@ -24,25 +24,26 @@
   font-family: var(--font-sans);
   font-size: 14px;
 
-  /* CodeBlueprint design tokens — an opinionated, always-dark "architect's workspace" theme,
-     deliberately not following the OS's light/dark preference: the identity should look the same
-     regardless of the visiting machine's settings. */
-  --cb-bg: #0d0f14;
-  --cb-surface: #161922;
-  --cb-surface-alt: #1d212c;
-  --cb-border: rgba(255, 255, 255, 0.08);
-  --cb-text: #e8eaed;
-  --cb-text-dim: #9aa1ac;
-  --cb-blue: #4d7fff;
+  /* CodeBlueprint design tokens — a restrained, near-black neutral theme. Deliberately not
+     following the OS's light/dark preference (the identity should look the same everywhere), and
+     deliberately plain: no blue/navy tint in the neutrals, no glow/glass/gradient chrome — those
+     read as decorative rather than functional. Color is reserved for real signal (file/layer kind,
+     score severity, risk), not for UI chrome. */
+  --cb-bg: #09090a;
+  --cb-surface: #111113;
+  --cb-surface-alt: #19191c;
+  --cb-border: rgba(255, 255, 255, 0.07);
+  --cb-text: #eeeeef;
+  --cb-text-dim: #8a8a8f;
+  --cb-blue: #5b8def;
   --cb-cyan: #22d3ee;
   --cb-amber: #f5a524;
   --cb-red: #ef4444;
   --cb-purple: #a78bfa;
 
-  /* Layered ambient shadows (a tight contact shadow + a soft diffuse one) instead of a flat 1px
-     border alone — real elevation instead of the "outlined rectangle" look. */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 24px -8px rgba(0, 0, 0, 0.5);
-  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 36px -8px rgba(0, 0, 0, 0.55);
+  /* Subtle, neutral (not colored) elevation shadows — real but understated, not a glow. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 10px -4px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px -4px rgba(0, 0, 0, 0.4);
 }
 
 body {
@@ -51,11 +52,9 @@ body {
   color: var(--cb-text);
 }
 
-/* --- HUD atmosphere: a faint fixed grid behind the whole app. pointer-events:none and z-index:0,
-   so it only ever shows through genuinely empty canvas/void areas — every real panel
-   (header/sidebar/inspector/cards) paints its own solid background over it, so this never competes
-   with actual content for legibility. (An earlier version also had a slow scanline sweep across
-   the screen — removed on request, it read as distracting motion rather than atmosphere.) */
+/* A faint fixed grid behind the whole app — pointer-events:none and z-index:0, so it only ever
+   shows through genuinely empty canvas/void areas; every real panel paints its own solid
+   background over it. Kept intentionally subtle: texture, not decoration. */
 .app-layout {
   position: relative;
 }
@@ -66,24 +65,9 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 34px 34px;
-}
-
-/* A static, faint film-grain texture (SVG feTurbulence, no image asset) — keeps large dark
-   surfaces from reading as flat/digital. Static, not animated, same reasoning as the glass panels
-   above: after removing the scanline, new atmosphere here is about material, not motion. */
-.app-layout::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-size: 180px 180px;
 }
 
 .app-layout > * {
@@ -91,101 +75,16 @@ body {
   z-index: 1;
 }
 
-/* --- HUD corner-bracket frame: a reusable sci-fi-readout accent (4 L-shaped corner marks drawn
-   with layered background-gradients on a pseudo-element, no extra DOM). Override --hud-color per
-   instance to match context; --hud-size controls the bracket arm length. */
-.hud-frame,
-.minimap,
-.command-palette,
-.health-score-card,
-.graph-legend {
-  position: relative;
-  --hud-color: var(--cb-blue);
-  --hud-size: 10px;
-}
-
-.hud-frame::before,
-.minimap::before,
-.command-palette::before,
-.health-score-card::before,
-.graph-legend::before {
-  content: "";
-  position: absolute;
-  inset: -5px;
-  pointer-events: none;
-  background: linear-gradient(var(--hud-color), var(--hud-color)) top left / 2px var(--hud-size) no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) top left / var(--hud-size) 2px no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) top right / 2px var(--hud-size) no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) top right / var(--hud-size) 2px no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) bottom left / 2px var(--hud-size) no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) bottom left / var(--hud-size) 2px no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) bottom right / 2px var(--hud-size) no-repeat,
-    linear-gradient(var(--hud-color), var(--hud-color)) bottom right / var(--hud-size) 2px no-repeat;
-  opacity: 0.85;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--hud-color) 70%, transparent));
-}
-
-/* Glass-panel treatment for floating HUD readouts — frosted blur behind a translucent fill, the
-   other classic sci-fi-console material alongside corner brackets. Static, not animated: after
-   removing the scanline sweep, new futuristic touches here lean on material/light rather than more
-   ambient motion. */
-.minimap,
-.command-palette,
-.graph-legend,
-.impact-banner {
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-}
-
-.boot-logo {
-  --hud-color: var(--cb-cyan);
-  --hud-size: 14px;
-  padding: 10px;
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--cb-cyan) 60%, transparent));
-}
-
 .boot-sequence {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.6rem;
 }
 
-.boot-line {
-  opacity: 0;
-  animation: boot-line-in 0.4s ease-out forwards;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: var(--cb-cyan);
-}
-
-.boot-line--cursor::after {
-  content: "_";
-  margin-left: 2px;
-  animation: boot-cursor-blink 0.9s step-end infinite;
-}
-
-@keyframes boot-line-in {
-  from {
-    opacity: 0;
-    transform: translateX(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes boot-cursor-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
+.boot-label {
+  font-size: 0.8rem;
+  color: var(--cb-text-dim);
 }
 
 .app-placeholder {
@@ -232,7 +131,6 @@ body {
 }
 
 .app-header {
-  position: relative;
   padding: 0.6rem 1rem;
   background: var(--cb-surface);
   border-bottom: 1px solid var(--cb-border);
@@ -240,25 +138,6 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-}
-
-/* A static (non-animated) gradient edge instead of a flat single-color border — the header reads
-   as a lit console panel rather than a plain toolbar. */
-.app-header::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--cb-blue) 70%, transparent) 20%,
-    color-mix(in srgb, var(--cb-cyan) 70%, transparent) 50%,
-    color-mix(in srgb, var(--cb-purple) 70%, transparent) 80%,
-    transparent
-  );
 }
 
 .app-brand {
@@ -275,8 +154,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
-  background: linear-gradient(135deg, var(--cb-blue), color-mix(in srgb, var(--cb-blue) 60%, var(--cb-purple)));
+  border-radius: 6px;
+  background: var(--cb-blue);
   color: #fff;
 }
 
@@ -284,10 +163,7 @@ body {
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: -0.01em;
-  background: linear-gradient(90deg, var(--cb-text), var(--cb-cyan));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--cb-text);
 }
 
 .app-brand-project {
@@ -353,7 +229,6 @@ body {
 .hide-reexports-toggle input[type="checkbox"]:checked {
   background: var(--cb-blue);
   border-color: var(--cb-blue);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--cb-blue) 50%, transparent);
 }
 
 .hide-reexports-toggle input[type="checkbox"]:checked::after {
@@ -396,13 +271,12 @@ body {
 }
 
 .view-toggle button.active {
-  background: color-mix(in srgb, var(--cb-blue) 25%, transparent);
+  background: var(--cb-surface-alt);
   color: var(--cb-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-blue) 45%, transparent), 0 0 10px color-mix(in srgb, var(--cb-blue) 35%, transparent);
 }
 
 .view-toggle button.active:hover {
-  background: color-mix(in srgb, var(--cb-blue) 32%, transparent);
+  background: var(--cb-surface-alt);
 }
 
 .app-body {
@@ -481,7 +355,6 @@ body {
 }
 
 .graph-legend {
-  --hud-color: var(--cb-amber);
   position: absolute;
   right: 0.75rem;
   top: 0.75rem;
@@ -489,7 +362,7 @@ body {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem 0.65rem;
-  background: color-mix(in srgb, var(--cb-surface) 75%, transparent);
+  background: var(--cb-surface);
   border: 1px solid var(--cb-border);
   border-radius: 6px;
   font-size: 0.7rem;
@@ -548,11 +421,10 @@ body {
 }
 
 .minimap {
-  --hud-color: var(--cb-cyan);
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
-  background: color-mix(in srgb, var(--cb-surface) 85%, transparent);
+  background: var(--cb-surface);
   border: 1px solid var(--cb-border);
   border-radius: 6px;
   cursor: crosshair;
@@ -572,10 +444,10 @@ body {
 .command-palette {
   width: 100%;
   max-width: 560px;
-  background: color-mix(in srgb, var(--cb-surface) 88%, transparent);
+  background: var(--cb-surface);
   border: 1px solid var(--cb-border);
   border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -661,8 +533,8 @@ body {
   display: flex;
   gap: 1.25rem;
   padding: 0.6rem 1.25rem;
-  background: color-mix(in srgb, var(--cb-surface) 85%, transparent);
-  border: 1px solid color-mix(in srgb, var(--cb-red) 50%, transparent);
+  background: var(--cb-surface);
+  border: 1px solid var(--cb-border);
   border-radius: 999px;
   pointer-events: none;
 }
@@ -964,7 +836,6 @@ body {
 }
 
 .health-score-card {
-  --hud-color: var(--cb-purple);
   display: flex;
   align-items: center;
   gap: 2rem;
@@ -993,7 +864,6 @@ body {
 
 .health-ring-progress {
   transition: stroke-dashoffset 0.15s linear, stroke 0.3s ease-out;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 65%, transparent));
 }
 
 .health-ring-value {
@@ -1007,7 +877,6 @@ body {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--health-color, var(--cb-cyan));
-  text-shadow: 0 0 18px color-mix(in srgb, var(--health-color, var(--cb-cyan)) 55%, transparent);
   transition: color 0.3s ease-out;
 }
 
@@ -1106,9 +975,9 @@ body {
 }
 
 .overview-metric-card:hover {
-  border-color: color-mix(in srgb, var(--metric-color) 45%, var(--cb-border));
-  box-shadow: var(--shadow-card-hover), 0 0 20px color-mix(in srgb, var(--metric-color) 22%, transparent);
-  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--metric-color) 40%, var(--cb-border));
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
 }
 
 .overview-metric-value {

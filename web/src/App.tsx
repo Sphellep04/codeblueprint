@@ -137,22 +137,9 @@ export default function App() {
   if (state.status === "loading") {
     return (
       <div className="app-placeholder app-placeholder--loading">
-        <div className="hud-frame boot-logo">
-          <Logo />
-        </div>
         <div className="boot-sequence">
-          <div className="boot-line" style={{ animationDelay: "0.05s" }}>
-            ESTABLISHING CONNECTION
-          </div>
-          <div className="boot-line" style={{ animationDelay: "0.45s" }}>
-            PARSING SOURCE TREE
-          </div>
-          <div className="boot-line" style={{ animationDelay: "0.85s" }}>
-            MAPPING DEPENDENCIES
-          </div>
-          <div className="boot-line boot-line--cursor" style={{ animationDelay: "1.25s" }}>
-            ANALYZING ARCHITECTURE
-          </div>
+          <Logo />
+          <div className="boot-label">Analyzing codebase…</div>
         </div>
       </div>
     );
