@@ -24,6 +24,138 @@ body {
   color: var(--cb-text);
 }
 
+/* --- HUD atmosphere: a faint fixed grid + a slow scanline sweep behind the whole app. Both are
+   pointer-events:none and z-index:0, so they only ever show through genuinely empty canvas/void
+   areas — every real panel (header/sidebar/inspector/cards) paints its own solid background over
+   them, so this never competes with actual content for legibility. */
+.app-layout {
+  position: relative;
+}
+
+.app-layout::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.app-layout::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--cb-cyan) 5%, transparent) 48%,
+    transparent 100%
+  );
+  background-size: 100% 240px;
+  background-repeat: no-repeat;
+  animation: hud-scan 7s linear infinite;
+}
+
+@keyframes hud-scan {
+  0% {
+    background-position: 0 -240px;
+  }
+  100% {
+    background-position: 0 100vh;
+  }
+}
+
+.app-layout > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- HUD corner-bracket frame: a reusable sci-fi-readout accent (4 L-shaped corner marks drawn
+   with layered background-gradients on a pseudo-element, no extra DOM). Override --hud-color per
+   instance to match context; --hud-size controls the bracket arm length. */
+.hud-frame,
+.minimap,
+.command-palette,
+.health-score-card {
+  position: relative;
+  --hud-color: var(--cb-blue);
+  --hud-size: 10px;
+}
+
+.hud-frame::before,
+.minimap::before,
+.command-palette::before,
+.health-score-card::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background: linear-gradient(var(--hud-color), var(--hud-color)) top left / 2px var(--hud-size) no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) top left / var(--hud-size) 2px no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) top right / 2px var(--hud-size) no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) top right / var(--hud-size) 2px no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) bottom left / 2px var(--hud-size) no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) bottom left / var(--hud-size) 2px no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) bottom right / 2px var(--hud-size) no-repeat,
+    linear-gradient(var(--hud-color), var(--hud-color)) bottom right / var(--hud-size) 2px no-repeat;
+  opacity: 0.85;
+}
+
+.boot-logo {
+  --hud-color: var(--cb-cyan);
+  --hud-size: 14px;
+  padding: 10px;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--cb-cyan) 60%, transparent));
+}
+
+.boot-sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.boot-line {
+  opacity: 0;
+  animation: boot-line-in 0.4s ease-out forwards;
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--cb-cyan);
+}
+
+.boot-line--cursor::after {
+  content: "_";
+  margin-left: 2px;
+  animation: boot-cursor-blink 0.9s step-end infinite;
+}
+
+@keyframes boot-line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes boot-cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .app-placeholder {
   padding: 2rem;
   color: var(--cb-text-dim);
@@ -142,11 +274,42 @@ body {
 .hide-reexports-toggle {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   font-size: 0.85rem;
   color: var(--cb-text-dim);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.hide-reexports-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: 1px solid var(--cb-border);
+  border-radius: 3px;
+  background: var(--cb-surface-alt);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.12s ease-out, border-color 0.12s ease-out;
+}
+
+.hide-reexports-toggle input[type="checkbox"]:checked {
+  background: var(--cb-blue);
+  border-color: var(--cb-blue);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cb-blue) 50%, transparent);
+}
+
+.hide-reexports-toggle input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
 
 .view-toggle {
@@ -179,6 +342,7 @@ body {
 .view-toggle button.active {
   background: color-mix(in srgb, var(--cb-blue) 25%, transparent);
   color: var(--cb-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cb-blue) 45%, transparent), 0 0 10px color-mix(in srgb, var(--cb-blue) 35%, transparent);
 }
 
 .view-toggle button.active:hover {
@@ -327,6 +491,7 @@ body {
 }
 
 .minimap {
+  --hud-color: var(--cb-cyan);
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
@@ -403,8 +568,15 @@ body {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: var(--cb-text-dim);
   width: 46px;
+}
+
+.command-palette-result-kind--file {
+  color: var(--cb-blue);
+}
+
+.command-palette-result-kind--symbol {
+  color: var(--cb-purple);
 }
 
 .command-palette-result-label {
@@ -495,6 +667,15 @@ body {
   margin: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, monospace;
+}
+
+.inspect-stats dd.stat-warn {
+  color: var(--cb-amber);
+}
+
+.inspect-stats dd.stat-cyan {
+  color: var(--cb-cyan);
 }
 
 .show-impact-button,
@@ -578,14 +759,32 @@ body {
 
 .hotspots-list li {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.25rem 0;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
   border-bottom: 1px solid var(--cb-border);
 }
 
+.hotspots-rank {
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  color: var(--cb-cyan);
+  opacity: 0.7;
+}
+
+.hotspots-file {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hotspots-count {
-  color: var(--cb-text-dim);
+  flex-shrink: 0;
+  color: var(--cb-cyan);
+  font-family: ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -706,6 +905,7 @@ body {
 }
 
 .health-score-card {
+  --hud-color: var(--cb-purple);
   display: flex;
   align-items: center;
   gap: 2rem;
@@ -725,10 +925,18 @@ body {
 }
 
 .health-score-value {
+  font-family: ui-monospace, monospace;
   font-size: 2.6rem;
   font-weight: 800;
-  color: var(--cb-cyan);
   font-variant-numeric: tabular-nums;
+  color: var(--health-color, var(--cb-cyan));
+  text-shadow: 0 0 18px color-mix(in srgb, var(--health-color, var(--cb-cyan)) 55%, transparent);
+  transition: color 0.3s ease-out;
+}
+
+.health-sub-score-value {
+  color: var(--health-color, var(--cb-text));
+  font-family: ui-monospace, monospace;
 }
 
 .health-score-label {
@@ -810,24 +1018,28 @@ body {
 }
 
 .overview-metric-card {
+  --metric-color: var(--cb-blue);
   background: var(--cb-surface-alt);
   border: 1px solid var(--cb-border);
+  border-top: 2px solid color-mix(in srgb, var(--metric-color) 55%, var(--cb-border));
   border-radius: 8px;
   padding: 0.85rem 1rem;
   text-align: center;
-  transition: border-color 0.15s ease-out, transform 0.15s ease-out;
+  transition: border-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 
 .overview-metric-card:hover {
-  border-color: color-mix(in srgb, var(--cb-blue) 35%, var(--cb-border));
+  border-color: color-mix(in srgb, var(--metric-color) 45%, var(--cb-border));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--metric-color) 25%, transparent);
   transform: translateY(-1px);
 }
 
 .overview-metric-value {
+  font-family: ui-monospace, monospace;
   font-size: 1.6rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--cb-blue);
+  color: var(--metric-color);
 }
 
 .overview-metric-label {

@@ -90,7 +90,9 @@ export default function CommandPalette({ files, symbols, rootDir, onSelectFile, 
               onMouseEnter={() => setActiveIndex(i)}
               onClick={() => choose(item)}
             >
-              <span className="command-palette-result-kind">{item.kind === "file" ? "FILE" : "SYMBOL"}</span>
+              <span className={`command-palette-result-kind command-palette-result-kind--${item.kind}`}>
+                {item.kind === "file" ? "FILE" : "SYMBOL"}
+              </span>
               <span className="command-palette-result-label">{item.label}</span>
               {item.kind === "symbol" && <span className="command-palette-result-detail">{item.detail}</span>}
             </li>

@@ -5,6 +5,11 @@ interface HotspotsPanelProps {
   data: HotspotReport;
 }
 
+// Deliberately distinct per metric — three bars in one blue read as a repeated template; three
+// colors read as three different signals (mirrors the app's design-token hex values, see
+// GraphView.tsx's comment for why this can't reference --cb-* vars from a JS-computed style).
+const METRIC_COLOR = { coupling: "#a78bfa", complexity: "#f5a524", dependencies: "#22d3ee" };
+
 export default function HotspotsPanel({ data }: HotspotsPanelProps) {
   const maxDeps = Math.max(1, ...data.modules.map((m) => m.dependencyCount));
   const maxCoupling = Math.max(1, ...data.modules.map((m) => m.coupling));
@@ -18,8 +23,9 @@ export default function HotspotsPanel({ data }: HotspotsPanelProps) {
           <p className="hotspots-empty">No files have incoming dependencies.</p>
         ) : (
           <ul className="hotspots-list">
-            {data.hotspots.map((h) => (
+            {data.hotspots.map((h, i) => (
               <li key={h.filePath}>
+                <span className="hotspots-rank">{String(i + 1).padStart(2, "0")}</span>
                 <span className="hotspots-file">{relativePath(h.filePath, data.rootDir)}</span>
                 <span className="hotspots-count">{h.dependents} dependents</span>
               </li>
@@ -53,9 +59,21 @@ export default function HotspotsPanel({ data }: HotspotsPanelProps) {
           {data.modules.map((m) => (
             <div key={m.name} className="module-card">
               <h3>{m.name}</h3>
-              <BarRow label="Coupling" value={m.coupling} max={maxCoupling} display={String(m.coupling)} />
-              <BarRow label="Complexity" value={m.complexityAverage} max={maxComplexity} display={m.complexityAverage.toFixed(1)} />
-              <BarRow label="Dependencies" value={m.dependencyCount} max={maxDeps} display={String(m.dependencyCount)} />
+              <BarRow label="Coupling" value={m.coupling} max={maxCoupling} display={String(m.coupling)} color={METRIC_COLOR.coupling} />
+              <BarRow
+                label="Complexity"
+                value={m.complexityAverage}
+                max={maxComplexity}
+                display={m.complexityAverage.toFixed(1)}
+                color={METRIC_COLOR.complexity}
+              />
+              <BarRow
+                label="Dependencies"
+                value={m.dependencyCount}
+                max={maxDeps}
+                display={String(m.dependencyCount)}
+                color={METRIC_COLOR.dependencies}
+              />
             </div>
           ))}
         </div>
@@ -64,13 +82,13 @@ export default function HotspotsPanel({ data }: HotspotsPanelProps) {
   );
 }
 
-function BarRow({ label, value, max, display }: { label: string; value: number; max: number; display: string }) {
+function BarRow({ label, value, max, display, color }: { label: string; value: number; max: number; display: string; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return (
     <div className="bar-row">
       <span className="bar-label">{label}</span>
       <div className="bar-track">
-        <div className="bar-fill" style={{ width: `${pct}%` }} />
+        <div className="bar-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
       <span className="bar-value">{display}</span>
     </div>

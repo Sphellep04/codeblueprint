@@ -42,9 +42,9 @@ export default function InspectPanel({ file, edges, rootDir, impact, onShowImpac
         <dt>Components</dt>
         <dd>{file.componentCount}</dd>
         <dt>Complexity</dt>
-        <dd>{file.complexityTotal}</dd>
+        <dd className={file.complexityTotal > 10 ? "stat-warn" : undefined}>{file.complexityTotal}</dd>
         <dt>Incoming edges</dt>
-        <dd>{incoming}</dd>
+        <dd className="stat-cyan">{incoming}</dd>
         <dt>Outgoing edges</dt>
         <dd>{outgoing}</dd>
       </dl>

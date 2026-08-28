@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import type { ExplorerData, CodeGraph, FileModel } from "../types";
 import { relativePath } from "../lib/paths";
-import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
+import { classifyFileKind, FILE_KIND_SHAPE, FILE_KIND_COLOR } from "../lib/fileKind";
 import { classifyLayer, LAYER_ORDER, LAYER_COLOR } from "../lib/layer";
 import Legend from "./Legend";
 
@@ -15,15 +15,7 @@ interface ArchitectureViewProps {
 
 // Mirrors GraphView.tsx's design-token hex values — see its comment for why Cytoscape (canvas
 // rendering, not DOM) can't reference index.css's --cb-* custom properties directly.
-const COLOR = { blue: "#4d7fff", cyan: "#22d3ee", amber: "#f5a524", purple: "#a78bfa", utility: "#6b7280" };
-
-const KIND_COLOR: Record<FileKind, string> = {
-  entry: COLOR.amber,
-  component: COLOR.blue,
-  class: COLOR.purple,
-  service: COLOR.cyan,
-  utility: COLOR.utility,
-};
+const COLOR = { blue: "#4d7fff" };
 
 const LEGEND_ITEMS = LAYER_ORDER.map((layer) => ({ label: layer, color: LAYER_COLOR[layer] }));
 
@@ -133,7 +125,7 @@ export default function ArchitectureView({ data, codeGraph, selectedPath, onSele
           label: relativePath(f.absolutePath, data.rootDir),
           parent: `layer:${layer}`,
           shape: FILE_KIND_SHAPE[kind],
-          fileColor: KIND_COLOR[kind],
+          fileColor: FILE_KIND_COLOR[kind],
         },
         classes: "file",
       };

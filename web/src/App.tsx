@@ -137,8 +137,23 @@ export default function App() {
   if (state.status === "loading") {
     return (
       <div className="app-placeholder app-placeholder--loading">
-        <Logo />
-        <p>Analyzing codebase…</p>
+        <div className="hud-frame boot-logo">
+          <Logo />
+        </div>
+        <div className="boot-sequence">
+          <div className="boot-line" style={{ animationDelay: "0.05s" }}>
+            ESTABLISHING CONNECTION
+          </div>
+          <div className="boot-line" style={{ animationDelay: "0.45s" }}>
+            PARSING SOURCE TREE
+          </div>
+          <div className="boot-line" style={{ animationDelay: "0.85s" }}>
+            MAPPING DEPENDENCIES
+          </div>
+          <div className="boot-line boot-line--cursor" style={{ animationDelay: "1.25s" }}>
+            ANALYZING ARCHITECTURE
+          </div>
+        </div>
       </div>
     );
   }
@@ -210,7 +225,7 @@ export default function App() {
         </div>
       ) : (
         <div className="app-body">
-          {tree && <Sidebar tree={tree} selectedPath={selectedPath} onSelect={onSelect} />}
+          {tree && <Sidebar tree={tree} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />}
           {/* Sidebar/InspectPanel stay mounted across graph/architecture/symbols switches (they're
               shared, not per-view) — only the middle content panel remounts+fades, so folder
               expand/collapse state in the sidebar survives switching tabs. */}

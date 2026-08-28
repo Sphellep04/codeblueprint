@@ -36,3 +36,17 @@ export const FILE_KIND_LABEL: Record<FileKind, string> = {
   service: "Service",
   utility: "Utility / function",
 };
+
+// Shared across every component that shows a file's kind (GraphView, ArchitectureView, Sidebar,
+// CommandPalette) so the same file always reads as the same color everywhere in the app — one
+// color language, not a per-component reinvention of it. Mirrors the app's design-token hex values
+// (see GraphView.tsx's comment for why Cytoscape/canvas rendering can't reference index.css's
+// --cb-* custom properties directly; components using plain CSS classes instead reference the
+// matching --cb-* token so both stay in sync by construction).
+export const FILE_KIND_COLOR: Record<FileKind, string> = {
+  entry: "#f5a524",
+  component: "#4d7fff",
+  class: "#a78bfa",
+  service: "#22d3ee",
+  utility: "#6b7280",
+};

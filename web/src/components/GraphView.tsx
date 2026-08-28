@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import type { ExplorerData, ImpactReport, CodeGraph, HotspotReport } from "../types";
 import { relativePath } from "../lib/paths";
-import { classifyFileKind, FILE_KIND_SHAPE, FileKind } from "../lib/fileKind";
+import { classifyFileKind, FILE_KIND_SHAPE, FILE_KIND_COLOR } from "../lib/fileKind";
 import { incomingEdgeCount } from "../lib/metrics";
 import Legend from "./Legend";
 import ImpactBanner from "./ImpactBanner";
@@ -22,33 +22,18 @@ interface GraphViewProps {
 // Cytoscape renders to <canvas>, not the DOM, so index.css's --cb-* custom properties aren't
 // reachable from its stylesheet — these mirror the same design-token hex values by hand; keep them
 // in sync if the tokens ever change.
-const COLOR = {
-  blue: "#4d7fff",
-  cyan: "#22d3ee",
-  amber: "#f5a524",
-  red: "#ef4444",
-  purple: "#a78bfa",
-  utility: "#6b7280",
-};
-
-const KIND_COLOR: Record<FileKind, string> = {
-  entry: COLOR.amber,
-  component: COLOR.blue,
-  class: COLOR.purple,
-  service: COLOR.cyan,
-  utility: COLOR.utility,
-};
+const COLOR = { blue: "#4d7fff", red: "#ef4444", amber: "#f5a524" };
 
 const MIN_SIZE = 10;
 const MAX_SIZE = 40;
 const SIZE_PER_INCOMING_EDGE = 3;
 
 const LEGEND_ITEMS = [
-  { label: "Entry point", color: KIND_COLOR.entry },
-  { label: "Component", color: KIND_COLOR.component },
-  { label: "Class", color: KIND_COLOR.class },
-  { label: "Service", color: KIND_COLOR.service },
-  { label: "Utility / function", color: KIND_COLOR.utility },
+  { label: "Entry point", color: FILE_KIND_COLOR.entry },
+  { label: "Component", color: FILE_KIND_COLOR.component },
+  { label: "Class", color: FILE_KIND_COLOR.class },
+  { label: "Service", color: FILE_KIND_COLOR.service },
+  { label: "Utility / function", color: FILE_KIND_COLOR.utility },
   { label: "Circular dependency", color: COLOR.red, ring: true },
 ];
 
@@ -131,7 +116,7 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
           id: f.absolutePath,
           label: relativePath(f.absolutePath, data.rootDir),
           shape: FILE_KIND_SHAPE[kind],
-          color: KIND_COLOR[kind],
+          color: FILE_KIND_COLOR[kind],
           size,
         },
         classes: cycleFiles.has(f.absolutePath) ? "in-cycle" : "",

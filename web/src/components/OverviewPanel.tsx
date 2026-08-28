@@ -1,7 +1,8 @@
 import type { ExplorerData, HotspotReport } from "../types";
 import { relativePath } from "../lib/paths";
 import { orphanFiles } from "../lib/metrics";
-import { computeArchitectureHealth, ScoreBreakdown } from "../lib/health";
+import { computeArchitectureHealth, scoreColor, ScoreBreakdown } from "../lib/health";
+import { useCountUp } from "../lib/useCountUp";
 
 interface OverviewPanelProps {
   data: ExplorerData;
@@ -12,8 +13,49 @@ interface OverviewPanelProps {
 
 const TOP_COUPLED_MODULES = 3;
 
+// Per-metric accent colors — deliberately varied rather than one blue for every card, so the
+// metrics grid reads as differentiated data, not a repeated template. Mirrors the app's
+// design-token hex values (see GraphView.tsx's comment on why this can't reference --cb-* vars).
+const METRIC_COLOR: Record<string, string> = {
+  Files: "#22d3ee",
+  Components: "#4d7fff",
+  Functions: "#22d3ee",
+  Classes: "#a78bfa",
+  Imports: "#4d7fff",
+  Exports: "#4d7fff",
+  Complexity: "#f5a524",
+};
+
 function sum(data: ExplorerData, pick: (f: ExplorerData["files"][number]) => number): number {
   return data.files.reduce((total, f) => total + pick(f), 0);
+}
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  const animated = useCountUp(value);
+  const color = METRIC_COLOR[label] ?? "#4d7fff";
+  return (
+    <div className="overview-metric-card" style={{ "--metric-color": color } as React.CSSProperties}>
+      <div className="overview-metric-value">{animated}</div>
+      <div className="overview-metric-label">{label}</div>
+    </div>
+  );
+}
+
+function SubScore({ score }: { score: ScoreBreakdown }) {
+  const animated = useCountUp(score.score);
+  return (
+    <details className="health-sub-score" style={{ "--health-color": scoreColor(score.score) } as React.CSSProperties}>
+      <summary>
+        <span className="health-sub-score-label">{score.label}</span>
+        <span className="health-sub-score-value">{animated}</span>
+      </summary>
+      <ul className="health-reasons">
+        {score.reasons.map((r) => (
+          <li key={r}>{r}</li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHotspots }: OverviewPanelProps) {
@@ -35,6 +77,7 @@ export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHots
 
   const hasAttentionItems = hotspots.cycles.length > 0 || orphans.length > 0 || topCoupledModules.length > 0;
   const health = computeArchitectureHealth(data, hotspots);
+  const overallAnimated = useCountUp(health.overall);
 
   return (
     <div className="overview-panel">
@@ -42,35 +85,24 @@ export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHots
 
       <div className="health-score-card">
         <div className="health-score-headline">
-          <div className="health-score-value">{health.overall}</div>
+          <div className="health-score-value" style={{ "--health-color": scoreColor(health.overall) } as React.CSSProperties}>
+            {overallAnimated}
+          </div>
           <div className="health-score-label">
             ARCHITECTURE HEALTH
             <div className="health-score-sublabel">Average of the three scores below</div>
           </div>
         </div>
         <div className="health-sub-scores">
-          {[health.modularity, health.dependencyHealth, health.complexity].map((s: ScoreBreakdown) => (
-            <details className="health-sub-score" key={s.label}>
-              <summary>
-                <span className="health-sub-score-label">{s.label}</span>
-                <span className="health-sub-score-value">{s.score}</span>
-              </summary>
-              <ul className="health-reasons">
-                {s.reasons.map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-              </ul>
-            </details>
+          {[health.modularity, health.dependencyHealth, health.complexity].map((s) => (
+            <SubScore score={s} key={s.label} />
           ))}
         </div>
       </div>
 
       <div className="overview-metrics-grid">
         {metrics.map((m) => (
-          <div className="overview-metric-card" key={m.label}>
-            <div className="overview-metric-value">{m.value}</div>
-            <div className="overview-metric-label">{m.label}</div>
-          </div>
+          <MetricCard label={m.label} value={m.value} key={m.label} />
         ))}
       </div>
 

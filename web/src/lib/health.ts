@@ -27,6 +27,18 @@ const ORPHAN_PENALTY = 4;
 const COMPLEXITY_THRESHOLD = 10;
 const COMPLEXITY_PENALTY_PER_POINT = 5;
 
+// Mirrors the app's design-token hex values (see GraphView.tsx's comment on why components using
+// inline styles/canvas rendering can't reference index.css's --cb-* custom properties directly).
+const SCORE_COLOR = { good: "#22d3ee", warn: "#f5a524", bad: "#ef4444" };
+
+/** Severity color for a 0-100 score — same three-band read as the rest of the app's amber/red
+ * "needs attention" language (Overview's attention items, InspectPanel's entry badge). */
+export function scoreColor(score: number): string {
+  if (score >= 80) return SCORE_COLOR.good;
+  if (score >= 50) return SCORE_COLOR.warn;
+  return SCORE_COLOR.bad;
+}
+
 function clampScore(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
