@@ -27,6 +27,7 @@ const STYLE: cytoscape.StylesheetStyle[] = [
     style: {
       label: "data(label)",
       "font-size": 9,
+      "font-family": "'JetBrains Mono', monospace",
       color: "#e6e6e6",
       "text-valign": "bottom",
       "text-halign": "center",

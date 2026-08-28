@@ -47,6 +47,7 @@ const STYLE: cytoscape.StylesheetStyle[] = [
       width: "data(size)",
       height: "data(size)",
       "font-size": 9,
+      "font-family": "'JetBrains Mono', monospace",
       color: "#e6e6e6",
       "text-valign": "bottom",
       "text-halign": "center",

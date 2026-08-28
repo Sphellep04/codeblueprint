@@ -3,6 +3,7 @@ import { relativePath } from "../lib/paths";
 import { orphanFiles } from "../lib/metrics";
 import { computeArchitectureHealth, scoreColor, ScoreBreakdown } from "../lib/health";
 import { useCountUp } from "../lib/useCountUp";
+import HealthRing from "./HealthRing";
 
 interface OverviewPanelProps {
   data: ExplorerData;
@@ -85,8 +86,11 @@ export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHots
 
       <div className="health-score-card">
         <div className="health-score-headline">
-          <div className="health-score-value" style={{ "--health-color": scoreColor(health.overall) } as React.CSSProperties}>
-            {overallAnimated}
+          <div className="health-ring-wrapper">
+            <HealthRing score={overallAnimated} color={scoreColor(health.overall)} />
+            <div className="health-ring-value" style={{ "--health-color": scoreColor(health.overall) } as React.CSSProperties}>
+              {overallAnimated}
+            </div>
           </div>
           <div className="health-score-label">
             ARCHITECTURE HEALTH
