@@ -198,26 +198,30 @@ export default function App() {
           {view === "graph" && <SearchBox ref={searchInputRef} value={searchTerm} onChange={onSearchChange} />}
         </div>
       </header>
-      {view === "overview" ? (
-        <div className="view-fade" key={view}>
-          <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
-        </div>
-      ) : view === "hotspots" ? (
-        <div className="view-fade" key={view}>
-          <HotspotsPanel data={hotspots} />
-        </div>
-      ) : view === "blueprint" ? (
+      {view === "blueprint" ? (
         <div className="view-fade" key={view}>
           <BlueprintView data={data} codeGraph={codeGraph} />
         </div>
       ) : (
         <div className="app-body">
-          {tree && <Sidebar tree={tree} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />}
-          {/* Sidebar/InspectPanel stay mounted across graph/architecture/symbols switches (they're
-              shared, not per-view) — only the middle content panel remounts+fades, so folder
-              expand/collapse state in the sidebar survives switching tabs. */}
+          {/* The sidebar (and, on the three graph-like views, the inspector) stay mounted across
+              every view switch — they're shared chrome, not per-view content — so folder
+              expand/collapse state survives switching tabs, and every view gets consistent
+              navigation instead of Overview/Hotspots being oddly full-width with no file tree. */}
+          {tree && (
+            <Sidebar
+              tree={tree}
+              codeGraph={codeGraph}
+              selectedPath={selectedPath}
+              onSelect={view === "overview" || view === "hotspots" ? onNavigateToFile : onSelect}
+            />
+          )}
           <div className="view-fade" key={view}>
-            {view === "graph" ? (
+            {view === "overview" ? (
+              <OverviewPanel data={data} hotspots={hotspots} onSelectFile={onNavigateToFile} onViewHotspots={onViewHotspots} />
+            ) : view === "hotspots" ? (
+              <HotspotsPanel data={hotspots} />
+            ) : view === "graph" ? (
               <GraphView
                 data={data}
                 codeGraph={codeGraph}
@@ -234,14 +238,16 @@ export default function App() {
               <SymbolGraphView codeGraph={codeGraph} selectedPath={selectedPath} rootDir={data.rootDir} onOpenSource={onOpenSource} />
             )}
           </div>
-          <InspectPanel
-            file={selectedFile}
-            edges={data.edges}
-            rootDir={data.rootDir}
-            impact={impact}
-            onShowImpact={onShowImpact}
-            onOpenSource={onOpenSource}
-          />
+          {(view === "graph" || view === "architecture" || view === "symbols") && (
+            <InspectPanel
+              file={selectedFile}
+              edges={data.edges}
+              rootDir={data.rootDir}
+              impact={impact}
+              onShowImpact={onShowImpact}
+              onOpenSource={onOpenSource}
+            />
+          )}
         </div>
       )}
       {paletteOpen && (

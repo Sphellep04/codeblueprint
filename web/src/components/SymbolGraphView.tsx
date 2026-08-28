@@ -109,7 +109,7 @@ export default function SymbolGraphView({ codeGraph, selectedPath, rootDir, onOp
       container: containerRef.current,
       elements: [...nodes, ...edges],
       style: STYLE,
-      layout: { name: "cose", animate: false, nodeRepulsion: () => 12000, idealEdgeLength: () => 80, componentSpacing: 120, nodeOverlap: 20 },
+      layout: { name: "cose", animate: false, nodeRepulsion: () => 6000, idealEdgeLength: () => 55, componentSpacing: 60, nodeOverlap: 12 },
     });
 
     cy.on("tap", "node", (evt) => {

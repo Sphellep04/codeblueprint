@@ -10,12 +10,23 @@ interface SidebarProps {
   onSelect: (path: string) => void;
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" className={`tree-chevron${open ? " tree-chevron--open" : ""}`} aria-hidden="true">
+      <path d="M3 2 L7 5 L3 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default function Sidebar({ tree, codeGraph, selectedPath, onSelect }: SidebarProps) {
   return (
     <nav className="sidebar" aria-label="Project files">
-      {tree.children.map((child) => (
-        <TreeItem key={child.path} node={child} codeGraph={codeGraph} depth={0} selectedPath={selectedPath} onSelect={onSelect} />
-      ))}
+      <div className="sidebar-header">{tree.name}</div>
+      <div className="tree-root">
+        {tree.children.map((child) => (
+          <TreeItem key={child.path} node={child} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />
+        ))}
+      </div>
     </nav>
   );
 }
@@ -23,43 +34,40 @@ export default function Sidebar({ tree, codeGraph, selectedPath, onSelect }: Sid
 function TreeItem({
   node,
   codeGraph,
-  depth,
   selectedPath,
   onSelect,
 }: {
   node: TreeNode;
   codeGraph: CodeGraph;
-  depth: number;
   selectedPath: string | null;
   onSelect: (path: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const indent = { paddingLeft: `${depth * 14 + 8}px` };
 
   if (!node.isDirectory) {
     const isSelected = node.path === selectedPath;
     const kindColor = node.file ? FILE_KIND_COLOR[classifyFileKind(node.file, codeGraph)] : undefined;
     return (
-      <div
-        className={`tree-item tree-file${isSelected ? " tree-item--selected" : ""}`}
-        style={indent}
-        onClick={() => onSelect(node.path)}
-      >
-        {kindColor && <span className="tree-file-dot" style={{ backgroundColor: kindColor }} />}
-        {node.name}
+      <div className={`tree-item tree-file${isSelected ? " tree-item--selected" : ""}`} onClick={() => onSelect(node.path)}>
+        <span className={`tree-file-dot${kindColor ? "" : " tree-file-dot--empty"}`} style={kindColor ? { backgroundColor: kindColor } : undefined} />
+        <span className="tree-item-label">{node.name}</span>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="tree-item tree-dir" style={indent} onClick={() => setCollapsed((c) => !c)}>
-        {collapsed ? "▸" : "▾"} {node.name}
+      <div className="tree-item tree-dir" onClick={() => setCollapsed((c) => !c)}>
+        <ChevronIcon open={!collapsed} />
+        <span className="tree-item-label">{node.name}</span>
       </div>
-      {!collapsed &&
-        node.children.map((child) => (
-          <TreeItem key={child.path} node={child} codeGraph={codeGraph} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
-        ))}
+      {!collapsed && (
+        <div className="tree-children">
+          {node.children.map((child) => (
+            <TreeItem key={child.path} node={child} codeGraph={codeGraph} selectedPath={selectedPath} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

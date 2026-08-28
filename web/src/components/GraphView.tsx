@@ -131,7 +131,10 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
       container: containerRef.current,
       elements: [...nodes, ...edges],
       style: STYLE,
-      layout: { name: "cose", animate: false, nodeRepulsion: () => 12000, idealEdgeLength: () => 80, componentSpacing: 120, nodeOverlap: 20 },
+      // Tighter than cose's defaults — on a small/medium project the default spacing spreads nodes
+      // across mostly-empty canvas; a denser layout reads as an intentional composition instead of
+      // sparse dots in a void, and still auto-fits (default fit:true) to whatever space is used.
+      layout: { name: "cose", animate: false, nodeRepulsion: () => 6000, idealEdgeLength: () => 55, componentSpacing: 60, nodeOverlap: 12 },
     });
 
     cy.on("tap", "node", (evt) => onSelect(evt.target.id()));

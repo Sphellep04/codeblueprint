@@ -14,9 +14,9 @@ interface OverviewPanelProps {
 
 const TOP_COUPLED_MODULES = 3;
 
-// Per-metric accent colors — deliberately varied rather than one blue for every card, so the
-// metrics grid reads as differentiated data, not a repeated template. Mirrors the app's
-// design-token hex values (see GraphView.tsx's comment on why this can't reference --cb-* vars).
+// Per-metric accent colors — deliberately varied rather than one blue for every stat, so the strip
+// reads as differentiated data, not a repeated template. Mirrors the app's design-token hex values
+// (see GraphView.tsx's comment on why this can't reference --cb-* vars).
 const METRIC_COLOR: Record<string, string> = {
   Files: "#22d3ee",
   Components: "#4d7fff",
@@ -31,13 +31,13 @@ function sum(data: ExplorerData, pick: (f: ExplorerData["files"][number]) => num
   return data.files.reduce((total, f) => total + pick(f), 0);
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
+function MetricStat({ label, value }: { label: string; value: number }) {
   const animated = useCountUp(value);
   const color = METRIC_COLOR[label] ?? "#4d7fff";
   return (
-    <div className="overview-metric-card" style={{ "--metric-color": color } as React.CSSProperties}>
-      <div className="overview-metric-value">{animated}</div>
-      <div className="overview-metric-label">{label}</div>
+    <div className="overview-stat" style={{ "--metric-color": color } as React.CSSProperties}>
+      <div className="overview-stat-value">{animated}</div>
+      <div className="overview-stat-label">{label}</div>
     </div>
   );
 }
@@ -84,33 +84,37 @@ export default function OverviewPanel({ data, hotspots, onSelectFile, onViewHots
     <div className="overview-panel">
       <h1 className="overview-title">{data.projectName}</h1>
 
-      <div className="health-score-card">
-        <div className="health-score-headline">
+      <div className="overview-health-section">
+        <div className="health-score-card">
           <div className="health-ring-wrapper">
-            <HealthRing score={overallAnimated} color={scoreColor(health.overall)} />
+            <HealthRing score={overallAnimated} color={scoreColor(health.overall)} size={132} />
             <div className="health-ring-value" style={{ "--health-color": scoreColor(health.overall) } as React.CSSProperties}>
               {overallAnimated}
             </div>
           </div>
-          <div className="health-score-label">
-            ARCHITECTURE HEALTH
-            <div className="health-score-sublabel">Average of the three scores below</div>
+          <div>
+            <div className="health-score-label">
+              ARCHITECTURE HEALTH
+              <div className="health-score-sublabel">Average of the three scores below</div>
+            </div>
+            <div className="health-sub-scores">
+              {[health.modularity, health.dependencyHealth, health.complexity].map((s) => (
+                <SubScore score={s} key={s.label} />
+              ))}
+            </div>
           </div>
         </div>
-        <div className="health-sub-scores">
-          {[health.modularity, health.dependencyHealth, health.complexity].map((s) => (
-            <SubScore score={s} key={s.label} />
+      </div>
+
+      <div className="overview-stats-section">
+        <div className="overview-stats-strip">
+          {metrics.map((m) => (
+            <MetricStat label={m.label} value={m.value} key={m.label} />
           ))}
         </div>
       </div>
 
-      <div className="overview-metrics-grid">
-        {metrics.map((m) => (
-          <MetricCard label={m.label} value={m.value} key={m.label} />
-        ))}
-      </div>
-
-      <section>
+      <section className="overview-attention-section">
         <h2>Needs attention</h2>
         {!hasAttentionItems ? (
           <p className="hotspots-empty">Nothing flagged — no circular dependencies, orphan files, or highly coupled modules.</p>
