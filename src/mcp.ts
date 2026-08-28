@@ -21,13 +21,27 @@ function fail(err: unknown) {
  * console banner). If a startup message is ever needed here, it must go to stderr instead.
  */
 export async function startMcpServer(rootDir: string): Promise<void> {
-  const ctx = loadMcpContext(rootDir);
   const server = new McpServer({ name: "codeblueprint", version: "1.0.0" });
+
+  // loadMcpContext does a full ts-morph parse — measured at several seconds even on a small
+  // project, and it's synchronous, CPU-bound work with no internal await, so Node's single thread
+  // can't make progress on anything else (including the MCP handshake itself) while it runs. An
+  // earlier version tried kicking it off via Promise.resolve().then(...) right after registering
+  // tools, hoping it would run "in the background" — it doesn't: that callback is still scheduled
+  // as a microtask ahead of server.connect()'s own internal setup, so it blocked initialize/
+  // tools/list exactly the same as calling it eagerly up front did. The only reliable fix is fully
+  // lazy: don't create the promise at all until a tool handler actually needs it, guaranteeing the
+  // handshake (which never touches ctx) can never be blocked behind this parse.
+  let ctxPromise: Promise<Awaited<ReturnType<typeof loadMcpContext>>> | null = null;
+  function getCtx() {
+    if (!ctxPromise) ctxPromise = Promise.resolve().then(() => loadMcpContext(rootDir));
+    return ctxPromise;
+  }
 
   server.registerTool(
     "get_summary",
     { description: "Project-wide structural summary: file/component/function/class counts, circular deps, orphan files.", inputSchema: z.object({}) },
-    async () => ok(ctx.getSummary())
+    async () => ok((await getCtx()).getSummary())
   );
 
   server.registerTool(
@@ -38,7 +52,7 @@ export async function startMcpServer(rootDir: string): Promise<void> {
     },
     async ({ file }) => {
       try {
-        return ok(ctx.getFileSummary(file));
+        return ok((await getCtx()).getFileSummary(file));
       } catch (err) {
         return fail(err);
       }
@@ -53,7 +67,7 @@ export async function startMcpServer(rootDir: string): Promise<void> {
     },
     async ({ file }) => {
       try {
-        return ok(ctx.getDependencies(file));
+        return ok((await getCtx()).getDependencies(file));
       } catch (err) {
         return fail(err);
       }
@@ -66,7 +80,7 @@ export async function startMcpServer(rootDir: string): Promise<void> {
       description: "Find functions/classes/components by name (substring match, case-insensitive).",
       inputSchema: z.object({ query: z.string().describe("Name or partial name to search for.") }),
     },
-    async ({ query }) => ok(ctx.findSymbol(query))
+    async ({ query }) => ok((await getCtx()).findSymbol(query))
   );
 
   server.registerTool(
@@ -77,7 +91,7 @@ export async function startMcpServer(rootDir: string): Promise<void> {
     },
     async ({ file }) => {
       try {
-        return ok(ctx.getImpact(file));
+        return ok((await getCtx()).getImpact(file));
       } catch (err) {
         return fail(err);
       }
@@ -87,7 +101,7 @@ export async function startMcpServer(rootDir: string): Promise<void> {
   server.registerTool(
     "get_hotspots",
     { description: "Most-connected files, circular-dependency chains, and per-module coupling/complexity.", inputSchema: z.object({}) },
-    async () => ok(ctx.getHotspots())
+    async () => ok((await getCtx()).getHotspots())
   );
 
   await server.connect(new StdioServerTransport());
