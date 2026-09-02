@@ -28,7 +28,7 @@ const program = new Command();
 
 program
   .name("codeblueprint")
-  .description("Codebase intelligence CLI — structural analysis of a JS/TS/React/Next.js project")
+  .description("See what breaks before you touch it — full blast-radius impact analysis for a JS/TS/React/Next.js project")
   .version(readOwnVersion())
   .argument("<path>", "path to the project to analyze")
   .option("--json", "print machine-readable JSON instead of the formatted report")

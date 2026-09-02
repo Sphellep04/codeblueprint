@@ -1,11 +1,14 @@
 # CodeBlueprint
 
-Codebase intelligence CLI — turns a JS/TS/React/Next.js project into a structural summary, a relationship graph, and a local web Explorer to browse it visually.
+**See what breaks before you touch it.** CodeBlueprint computes the full transitive blast radius of
+changing any file in a JS/TS/React/Next.js codebase — not just its direct importers, the whole
+downstream chain — plus a structural summary, a relationship graph, a local web Explorer to browse
+it visually, and a live MCP server so your AI assistant can query the same graph instead of grepping.
 
+- `--impact <file>`: the full transitive blast radius of changing a file — the signature feature
 - Structural summary: files, components, functions, classes, imports/exports, circular deps, orphan files
 - `--graph`: a full file/symbol/usage dependency graph
 - `--hotspots`: most-connected files, circular-dependency chains, per-module coupling/complexity
-- `--impact <file>`: the full transitive blast radius of changing a file
 - `--serve`: a local web Explorer — pan/zoom graph, search, per-file inspector, impact highlighting
 - `--mcp`: an MCP server so Claude Code/Cursor/Copilot can query the graph directly, no grepping
 - Basic npm/yarn monorepo support — see "Monorepo support" below

@@ -1,7 +1,7 @@
 {
   "name": "codeblueprint",
   "version": "1.0.0",
-  "description": "CLI tool for structural analysis of JavaScript/TypeScript/React/Next.js codebases",
+  "description": "See what breaks before you touch it — full blast-radius impact analysis for JavaScript/TypeScript/React/Next.js codebases, with a live MCP server for AI coding assistants.",
   "license": "MIT",
   "author": "Phellep Shapopi",
   "repository": {
@@ -15,11 +15,15 @@
   "keywords": [
     "cli",
     "codebase-analysis",
+    "impact-analysis",
+    "blast-radius",
     "dependency-graph",
     "static-analysis",
     "typescript",
     "react",
-    "nextjs"
+    "nextjs",
+    "mcp",
+    "ai-assistant"
   ],
   "bin": {
     "codeblueprint": "dist/cli.js"

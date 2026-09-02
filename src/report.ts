@@ -1,5 +1,6 @@
 import { Summary, HotspotReport, ImpactReport } from "./model";
 import { formatRows, formatBar, Row } from "./utils/format";
+import { bold, warn, dim } from "./utils/ansi";
 
 /**
  * The only module that knows about stdout, padding, or column widths.
@@ -21,16 +22,18 @@ export function formatReport(summary: Summary): string {
 
   const formatted = formatRows([...groupA, ...groupB]);
   const groupALines = formatted.slice(0, groupA.length);
-  const groupBLines = formatted.slice(groupA.length);
+  const groupBLines = formatted.slice(groupA.length).map((line, i) => (groupB[i].value > 0 ? warn(line) : line));
 
   return [
-    "CodeBlueprint",
+    bold("CodeBlueprint"),
     "",
     `Project: ${summary.projectName}`,
     "",
     ...groupALines,
     "",
     ...groupBLines,
+    "",
+    dim("Run with --serve to explore visually, or --mcp to let your AI assistant query this directly."),
   ].join("\n");
 }
 
@@ -52,7 +55,7 @@ function relativeToRoot(absolutePath: string, rootDir: string): string {
 }
 
 export function formatHotspotReport(report: HotspotReport): string {
-  const lines: string[] = ["CodeBlueprint — Architecture Intelligence", "", `Project: ${report.projectName}`, "", "Most connected files"];
+  const lines: string[] = [bold("CodeBlueprint — Architecture Intelligence"), "", `Project: ${report.projectName}`, "", "Most connected files"];
 
   if (report.hotspots.length === 0) {
     lines.push("  (none)");
@@ -96,7 +99,7 @@ export function formatImpactReport(report: ImpactReport): string {
   const routeCount = report.impactedRoutes.length;
 
   const lines: string[] = [
-    "CodeBlueprint — Impact Analysis",
+    bold("CodeBlueprint — Impact Analysis"),
     "",
     `Project: ${report.projectName}`,
     `Target: ${target}`,
