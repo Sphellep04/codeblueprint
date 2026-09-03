@@ -35,6 +35,17 @@ test("computeRoutes: a plain file outside pages/ or app/ is not a route", () => 
   assert.deepEqual(computeRoutes(ROOT, [p("src", "index.ts")]), new Set());
 });
 
+test("computeEntryPoints: a Storybook .stories.* file is recognized as an entry point", () => {
+  const files = [p("src", "Button.stories.tsx"), p("src", "Button.stories.js")];
+  const entryPoints = computeEntryPoints(ROOT, files);
+  assert.ok(entryPoints.has(p("src", "Button.stories.tsx")));
+  assert.ok(entryPoints.has(p("src", "Button.stories.js")));
+});
+
+test("computeEntryPoints: a Storybook story is not itself a route", () => {
+  assert.deepEqual(computeRoutes(ROOT, [p("src", "Button.stories.tsx")]), new Set());
+});
+
 function toPosix(value: string): string {
   return value.replace(/\\/g, "/");
 }

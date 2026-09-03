@@ -167,8 +167,32 @@ export function buildImportEdges(sourceFiles: SourceFile[], rootAbs: string, tab
         if (symbolId) edges.push({ file: filePath, symbol: symbolId });
       }
 
-      // Namespace imports (`import * as ns`) are not attributed to individual symbols — deferred,
-      // see README's "Known Phase 2 limitations". File-level connectivity is preserved via FileEdge.
+      const namespaceImportName = imp.getNamespaceImport();
+      // An identifier's getDefinitionNodes() resolves to the *NamespaceImport* node ("* as ns"),
+      // not the inner name identifier getNamespaceImport() returns — hence .getParent() here.
+      const namespaceImportNode = namespaceImportName?.getParent();
+      if (namespaceImportNode) {
+        // `import * as ns` — attribute only the symbols actually referenced via `ns.X` somewhere in
+        // the file, not every export of the module (that would be a guess, not a derived fact).
+        // Confirms this specific `ns.X` access resolves back to THIS import (not an unrelated
+        // same-named variable elsewhere) — same go-to-definition-based resolution this codebase uses
+        // everywhere else, and the same Node-reference-identity assumption table.nodeToId relies on.
+        const accessedNames = new Set<string>();
+        for (const propAccess of sf.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+          const objExpr = propAccess.getExpression();
+          if (objExpr.getKind() !== SyntaxKind.Identifier) continue;
+          const objIdentifier = objExpr.asKindOrThrow(SyntaxKind.Identifier);
+          if (!objIdentifier.getDefinitionNodes().includes(namespaceImportNode)) continue;
+          const nameNode = propAccess.getNameNode();
+          if (nameNode.getKind() === SyntaxKind.Identifier) {
+            accessedNames.add(nameNode.asKindOrThrow(SyntaxKind.Identifier).getText());
+          }
+        }
+        for (const name of accessedNames) {
+          const symbolId = table.byExportName.get(exportKey(targetPath, name));
+          if (symbolId) edges.push({ file: filePath, symbol: symbolId });
+        }
+      }
     }
   }
 

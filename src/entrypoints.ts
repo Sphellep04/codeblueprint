@@ -29,6 +29,7 @@ const APP_ROUTER_FILES = new Set([
 ]);
 
 const TEST_FILE_RE = /\.(test|spec)\.(js|jsx|ts|tsx)$/;
+const STORY_FILE_RE = /\.stories\.(js|jsx|ts|tsx|mjs|cjs)$/;
 const CONFIG_FILE_RE = /\.config\.(js|ts|cjs|mjs)$/;
 
 /** ts-morph's SourceFile.getFilePath() always returns forward-slash paths, even on
@@ -148,6 +149,11 @@ export function computeEntryPoints(rootAbs: string, filePaths: string[], package
     }
 
     if (TEST_FILE_RE.test(basename) || rel.includes("__tests__/")) {
+      entries.add(filePath);
+      continue;
+    }
+
+    if (STORY_FILE_RE.test(basename)) {
       entries.add(filePath);
       continue;
     }

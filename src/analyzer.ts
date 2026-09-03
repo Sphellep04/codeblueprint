@@ -104,7 +104,14 @@ export function countExports(sourceFile: SourceFile): number {
   return sourceFile.getExportedDeclarations().size;
 }
 
-const HOC_WRAPPER_RE = /^(React\.)?(memo|forwardRef)$/;
+// observer (mobx-react) fits the exact same single-call, sole-argument shape as memo/forwardRef.
+// connect (react-redux) and styled (styled-components) are deliberately NOT included here: connect
+// is curried (`connect(mapState)(Component)` — a second call whose callee is itself a call
+// expression, not a plain identifier this regex could match), and styled(Component) doesn't fit
+// this mechanism's premise at all (there's no already-named inner declaration being wrapped — it
+// constructs a new component). Forcing either in risks exactly the wrong-attribution outcome this
+// codebase avoids everywhere else.
+const HOC_WRAPPER_RE = /^(React\.)?(memo|forwardRef|observer)$/;
 
 /**
  * Climbs up through up to two layers of known component-HOC call wrappers

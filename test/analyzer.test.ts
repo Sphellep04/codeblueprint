@@ -4,7 +4,14 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { Project } from "ts-morph";
-import { getCyclomaticComplexity, getFunctionCandidates, getDependencyEdges, countClasses, getClassExpressionCandidates } from "../src/analyzer";
+import {
+  getCyclomaticComplexity,
+  getFunctionCandidates,
+  getDependencyEdges,
+  countClasses,
+  getClassExpressionCandidates,
+  getBindingAnchor,
+} from "../src/analyzer";
 
 function complexityOf(source: string, functionName: string): number {
   const project = new Project();
@@ -118,6 +125,19 @@ test("getDependencyEdges: require() of a path that doesn't resolve to any real f
   const rootAbs = path.resolve(dir);
   const sf = project.getSourceFileOrThrow(path.join(dir, "a.js"));
   assert.deepEqual(getDependencyEdges(sf, rootAbs), []);
+});
+
+test("getFunctionCandidates: observer(fn) unwraps the same way memo/forwardRef already do", () => {
+  const project = new Project();
+  const sf = project.createSourceFile(
+    "test.ts",
+    `import { observer } from "mobx-react";\nconst Widget = observer(function Widget() { return null; });\n`
+  );
+  const candidates = getFunctionCandidates(sf);
+  const widget = candidates.find((c) => c.name === "Widget");
+  assert.ok(widget, "expected a candidate named Widget, unwrapped through observer()");
+  const anchor = getBindingAnchor(widget!.node);
+  assert.equal(anchor?.getKindName(), "VariableDeclaration");
 });
 
 test("countClasses: a class expression bound to a variable is counted alongside class declarations", () => {

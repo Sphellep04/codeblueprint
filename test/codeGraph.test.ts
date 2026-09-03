@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { Project } from "ts-morph";
 import { runGraphAnalysis } from "../src/orchestrator";
-import { buildFileEdges, buildSymbolTable, buildUsageEdges } from "../src/codeGraph";
+import { buildFileEdges, buildSymbolTable, buildUsageEdges, buildImportEdges } from "../src/codeGraph";
 import { CodeGraph } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
@@ -149,6 +149,39 @@ test("buildUsageEdges negative: an unattributed module-top-level call produces n
   // index.tsx's top-level `mount();` has no enclosing symbol, so nothing should call "mount" itself.
   const anyEdgeToMount = g.usages.some((u) => symbolLabel(g, u.to) === "index.tsx#mount");
   assert.equal(anyEdgeToMount, false);
+});
+
+test("buildImportEdges: import * as ns attributes only the symbols actually accessed via ns.X", () => {
+  const project = new Project();
+  const nsFile = project.createSourceFile("ns.ts", `export function foo() {}\nexport function bar() {}\n`);
+  const consumerFile = project.createSourceFile(
+    "consumer.ts",
+    `import * as NS from "./ns";\nNS.foo();\nconst other = NS;\n` // "other" references NS itself, not a property — must not be attributed as "other"
+  );
+  const rootAbs = path.resolve(path.dirname(nsFile.getFilePath()));
+  const table = buildSymbolTable([nsFile, consumerFile]);
+  const edges = buildImportEdges([nsFile, consumerFile], rootAbs, table);
+
+  const foo = table.symbols.find((s) => s.name === "foo");
+  const bar = table.symbols.find((s) => s.name === "bar");
+  assert.ok(foo && bar);
+  assert.deepEqual(
+    edges.map((e) => e.symbol),
+    [foo!.id] // only foo was accessed via NS.foo() — bar was never referenced, so it's not attributed
+  );
+});
+
+test("buildImportEdges: a same-named local variable isn't mistaken for a namespace import's member access", () => {
+  const project = new Project();
+  const nsFile = project.createSourceFile("ns.ts", `export function foo() {}\n`);
+  const consumerFile = project.createSourceFile(
+    "consumer.ts",
+    `import * as NS from "./ns";\nconst other = { foo: () => {} };\nother.foo();\n`
+  );
+  const rootAbs = path.resolve(path.dirname(nsFile.getFilePath()));
+  const table = buildSymbolTable([nsFile, consumerFile]);
+  const edges = buildImportEdges([nsFile, consumerFile], rootAbs, table);
+  assert.deepEqual(edges, []); // "other.foo()" must not be misattributed to NS's foo just by name
 });
 
 test("buildUsageEdges positive: a dotted JSX tag (<NS.Bar/>) resolves through a namespace import", () => {

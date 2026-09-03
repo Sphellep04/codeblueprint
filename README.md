@@ -252,13 +252,13 @@ ancestor workspace.
 ## Metrics — what's actually counted
 
 - **Files**: `.js/.jsx/.ts/.tsx/.mjs/.cjs/.mts/.cts` files, excluding `node_modules`, `dist`, `build`, `.next`, `out`, `.git`, `coverage`, and anything matched by the project's own `.gitignore`. `.d.ts` files are excluded.
-- **Imports**: counted per `import` statement (not per named specifier), including `import type`. Dynamic `import()` and `require()` calls are **not** counted.
+- **Imports**: counted per `import` statement (not per named specifier), including `import type`. Dynamic `import()` and `require()` calls are **not** counted toward this number (though `require()` calls *are* tracked as file-level graph edges — see Known Phase 1 limitations below for the distinction).
 - **Exports**: counted per uniquely-named exported symbol per file (named, default, and re-exports via `export * from`/`export {x} from`).
-- **Functions**: function declarations, arrow/function expressions bound to a variable (`const f = () => {}`) — including through one or two layers of `memo`/`forwardRef` wrapping — anonymous default exports (`export default () => {}`), and class methods (excluding constructors/getters/setters). Inline callbacks with no such binding (e.g. `arr.map(x => ...)`) are deliberately excluded to avoid noise. **Components intentionally double-count as Functions** — a component is a function; "Components" is a tag on a subset, not a disjoint partition.
-- **Classes**: `class` declarations, including anonymous `export default class {}`. Class *expressions* assigned to a variable (`const X = class {}`) are not currently counted — a known limitation.
-- **Components** (heuristic): capitalized (or anonymous-default-exported) functions/arrows whose body contains JSX, plus classes extending `React.Component`/`PureComponent`. Known false positives: a capitalized non-component factory function that happens to return JSX. Known false negatives: `React.createElement(...)`-based components with no JSX syntax; HOC wrapping beyond `memo`/`forwardRef` (e.g. `connect(...)`, `observer(...)`, `styled(...)`).
+- **Functions**: function declarations, arrow/function expressions bound to a variable (`const f = () => {}`) — including through one or two layers of `memo`/`forwardRef`/`observer` wrapping — anonymous default exports (`export default () => {}`), and class methods (excluding constructors/getters/setters). Inline callbacks with no such binding (e.g. `arr.map(x => ...)`) are deliberately excluded to avoid noise. **Components intentionally double-count as Functions** — a component is a function; "Components" is a tag on a subset, not a disjoint partition.
+- **Classes**: `class` declarations, including anonymous `export default class {}`, plus class *expressions* assigned to a variable (`const X = class {}`).
+- **Components** (heuristic): capitalized (or anonymous-default-exported) functions/arrows whose body contains JSX, plus classes (declarations or expressions bound to a variable) extending `React.Component`/`PureComponent`. Known false positives: a capitalized non-component factory function that happens to return JSX. Known false negatives: `React.createElement(...)`-based components with no JSX syntax; HOC wrapping beyond `memo`/`forwardRef`/`observer` — `connect(mapState)(Component)` (react-redux) is curried, a structurally different case this mechanism doesn't attempt; `styled(Component)` doesn't fit the mechanism's premise at all (there's no already-named inner declaration being wrapped — it constructs a new component), so forcing it in was deliberately avoided rather than risking a wrong attribution.
 - **Circular deps**: the number of distinct strongly-connected clusters (Tarjan's SCC) in the file-level import/re-export graph — not the number of raw edges, and not the number of files involved. A 5-file cycle counts as 1, not 5.
-- **Orphan files**: files with zero internal importers that also aren't recognized as an entry point. Entry points include `package.json`'s `main`/`module`/`browser`/`exports["."]`/`bin` fields, `index.*`/`main.*` at the project root or in `src/`, Next.js `pages/**` and `app/**/{page,layout,loading,error,not-found,route,template,default}.*` + `middleware.*`, test files (`*.test.*`, `*.spec.*`, `__tests__/**`), and root-level `*.config.{js,ts,cjs,mjs}` files. Known false positives: files only reached via `require()`, dynamically-constructed `import()` strings, or Storybook `.stories.*` files.
+- **Orphan files**: files with zero internal importers that also aren't recognized as an entry point. Entry points include `package.json`'s `main`/`module`/`browser`/`exports["."]`/`bin` fields, `index.*`/`main.*` at the project root or in `src/`, Next.js `pages/**` and `app/**/{page,layout,loading,error,not-found,route,template,default}.*` + `middleware.*`, test files (`*.test.*`, `*.spec.*`, `__tests__/**`), Storybook `.stories.*` files, and root-level `*.config.{js,ts,cjs,mjs}` files. Known false positive: dynamically-constructed `import()`/`require()` strings (e.g. built from a variable at runtime) aren't resolved.
 
 Every phase of the roadmap is now implemented; the limitations below are the known, deliberate gaps
 in each — none of them produce a wrong result, they simply produce no result (a dropped edge, an
@@ -267,7 +267,7 @@ relationships.
 
 ## Known Phase 1 limitations
 
-- **CommonJS-only files** (`module.exports`/`require()`) show 0 imports/exports and contribute no graph edges — they'll typically surface as false-positive orphans even when actually used, and as disconnected nodes in `--graph` output. The `fixtures/basic-react-app/src/legacyHelper.js` fixture demonstrates this deliberately. Treating `require("./x")` calls as file-level edges (without full CommonJS export/symbol modeling) would be a cheap, worthwhile follow-up — deferred for now since no current fixture case exercises it.
+- **CommonJS-only files** (`module.exports`/`require()`) still show 0 imports/exports in the Metrics counts — there's no CommonJS export/symbol modeling. `require("./x")` calls *are* tracked as file-level graph edges (kind-tagged `"require"`, resolved on disk the same way `import` specifiers are), so a file only ever reached via `require()` is no longer misreported as an orphan or a disconnected Explorer node — only the CommonJS-only `fixtures/basic-react-app/src/legacyHelper.js` fixture file itself still looks disconnected, since its own `require("fs")` call is a Node builtin, not an internal file.
 - **`tsconfig.json` `exports` field**: only the top-level `"."` entry is resolved; full conditional-exports maps are not.
 
 ## Known Phase 2 limitations
@@ -277,15 +277,13 @@ relationships.
 - **Dynamic dispatch / reassigned function references** (`let f = a; if (x) f = b; f()`): resolves to the variable binding, not to `a` or `b`.
 - **Higher-order functions returning functions** (`const handler = makeHandler(); handler()`): resolves to the `handler` binding, not into `makeHandler`'s return statement.
 - **Method calls through interface-typed values**: resolve to the interface's method signature, not a concrete class implementation — the same ambiguity TypeScript's own go-to-definition has.
-- **Calls via `.bind()`/`.call()`/`.apply()`**, and calls through array/object literals of functions, are not walked.
-- **Namespace imports** (`import * as ns from "./x"`) aren't attributed to individual symbols in `imports`/`usages` — the file-level edge in `files` is still emitted, so connectivity isn't lost, only per-symbol attribution.
-- **Dotted/namespaced JSX tag names** (`<Foo.Bar />`) aren't resolved to a symbol.
+- **Calls through array/object literals of functions** (e.g. `[fn1, fn2][0]()`) are not walked.
+- **Namespaced JSX tag names** (`<ns:tag/>`, rare/legacy JSX syntax) aren't resolved to a symbol.
 
 ## Known Phase 3 limitations
 
 - **The Symbols view is per-file, not whole-project** — selecting a file shows its own symbols plus one hop of `calls`/`renders` neighbors, not a project-wide call graph; a deliberate scope choice for readability, not a technical limitation (`--graph`'s full `CodeGraph` data has everything needed for the latter).
 - **"Focus on this module"** (isolating one directory's subgraph in the Graph view) is still deferred — see "Explorer" above.
-- **CommonJS files render as disconnected nodes** in the Explorer graph, same root cause as the Phase 1/2 CommonJS limitation above.
 - **`npm audit` flags a moderate esbuild advisory** (via Vite's dev server, which allows cross-origin requests to read its responses) in `web/`'s dev dependencies. It affects `vite dev`/`npm run dev --workspace=web` only — the *built* static bundle `--serve` actually ships has no dev server in it. Not force-upgraded to Vite 8 yet since that's a breaking change; worth revisiting later.
 
 ## Known Phase 6 limitations
@@ -305,12 +303,6 @@ relationships.
 - **Bare cross-package imports** (`import {x} from "@myorg/lib"`, with no `tsconfig` `paths` alias)
   only resolve after `npm install` has created the `node_modules` symlinks — before install, or
   without a `paths` alias, the edge is silently dropped rather than guessed at.
-- **Named imports through a re-export barrel aren't attributed in `imports`/`ImportEdge`** (e.g.
-  `import { greet } from "@scope/lib"` where `@scope/lib`'s `index.ts` does `export * from
-  "./greet"`): the file-level edge and the `calls`/`renders` usage edge are still emitted correctly
-  (connectivity isn't lost), only the specific "this file imports this named symbol" attribution is
-  missing when it's routed through a barrel. This is a pre-existing Phase 2 gap, not new to monorepo
-  support — it's simply the first case that exercises a re-export barrel across a package boundary.
 
 ## Project layout
 
