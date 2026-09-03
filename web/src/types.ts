@@ -14,7 +14,7 @@ export interface FileModel {
   isEntryPoint: boolean;
 }
 
-export type FileEdgeKind = "import" | "reExport";
+export type FileEdgeKind = "import" | "reExport" | "require";
 
 export interface FileEdge {
   kind: FileEdgeKind;

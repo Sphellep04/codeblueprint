@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { Project } from "ts-morph";
 import { runGraphAnalysis } from "../src/orchestrator";
-import { buildFileEdges } from "../src/codeGraph";
+import { buildFileEdges, buildSymbolTable } from "../src/codeGraph";
 import { CodeGraph } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
@@ -55,6 +55,28 @@ test("buildFileEdges: drops an edge whose target isn't in the given sourceFiles 
 
   const edges = buildFileEdges([aFile], rootAbs);
   assert.deepEqual(edges, []);
+});
+
+test("buildSymbolTable: a class expression bound to a variable registers as a resolvable 'class' symbol", () => {
+  const project = new Project();
+  const sf = project.createSourceFile("Widget.ts", `export const Widget = class {\n  render() {}\n};\n`);
+  const table = buildSymbolTable([sf]);
+  const widget = table.symbols.find((s) => s.name === "Widget");
+  assert.ok(widget);
+  assert.equal(widget!.kind, "class");
+  assert.equal(widget!.exported, true);
+});
+
+test("buildSymbolTable: a class expression extending React.Component is classified as 'component', not 'class'", () => {
+  const project = new Project();
+  const sf = project.createSourceFile(
+    "Widget.tsx",
+    `import React from "react";\nexport const Widget = class extends React.Component {\n  render() { return null; }\n};\n`
+  );
+  const table = buildSymbolTable([sf]);
+  const widget = table.symbols.find((s) => s.name === "Widget");
+  assert.ok(widget);
+  assert.equal(widget!.kind, "component");
 });
 
 test("buildSymbolTable: Header is an exported component symbol", () => {

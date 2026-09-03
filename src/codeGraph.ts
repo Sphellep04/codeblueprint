@@ -1,5 +1,12 @@
 import { SourceFile, Node, SyntaxKind, Identifier } from "ts-morph";
-import { getDependencyEdges, getFunctionCandidates, getBindingAnchor, isInternalDependency, FunctionCandidate } from "./analyzer";
+import {
+  getDependencyEdges,
+  getFunctionCandidates,
+  getBindingAnchor,
+  isInternalDependency,
+  getClassExpressionCandidates,
+  FunctionCandidate,
+} from "./analyzer";
 import { getComponentNodes } from "./componentHeuristics";
 import { CodeGraph, FileEdge, SymbolModel, SymbolKind, ImportEdge, SymbolUsageEdge, UsageKind } from "./model";
 
@@ -99,6 +106,20 @@ export function buildSymbolTable(sourceFiles: SourceFile[]): SymbolTable {
       const name = cls.getName() ?? "default";
 
       const symbol = registerSymbol(cls, name, kind, filePath, exportName !== undefined, table);
+      if (exportName !== undefined) table.byExportName.set(exportKey(filePath, exportName), symbol.id);
+    }
+
+    // Class expressions (`const X = class {}`) aren't returned by sf.getClasses() — same reasoning
+    // as arrow/function-expression candidates above: a usage resolves via go-to-definition to the
+    // VariableDeclaration, not the ClassExpression itself, so the anchor needs registering too.
+    for (const candidate of getClassExpressionCandidates(sf)) {
+      const anchor = candidate.node.getParentIfKind(SyntaxKind.VariableDeclaration);
+      const exportName = exportIndex.get(candidate.node) ?? (anchor && exportIndex.get(anchor));
+      const kind: SymbolKind = componentNodes.has(candidate.node) ? "component" : "class";
+      const name = candidate.name ?? "default";
+
+      const symbol = registerSymbol(candidate.node, name, kind, filePath, exportName !== undefined, table);
+      if (anchor) table.nodeToId.set(anchor, symbol.id);
       if (exportName !== undefined) table.byExportName.set(exportKey(filePath, exportName), symbol.id);
     }
   }

@@ -1,5 +1,6 @@
+import * as fs from "fs";
 import * as path from "path";
-import { SourceFile, SyntaxKind, Node } from "ts-morph";
+import { SourceFile, SyntaxKind, Node, ClassExpression } from "ts-morph";
 
 export interface FunctionCandidate {
   node: Node;
@@ -9,7 +10,13 @@ export interface FunctionCandidate {
 /** True if the resolved specifier source file is a real project file (not node_modules, within rootDir). */
 export function isInternalDependency(resolved: SourceFile | undefined, rootAbs: string): resolved is SourceFile {
   if (!resolved) return false;
-  const p = resolved.getFilePath();
+  return isInternalPath(resolved.getFilePath(), rootAbs);
+}
+
+/** Same rootDir-containment + not-node_modules check as isInternalDependency, but for a plain path
+ * string rather than a ts-morph-resolved SourceFile — used by the require() resolution below, which
+ * has no SourceFile to check against since ts-morph never resolves a bare require() specifier. */
+function isInternalPath(p: string, rootAbs: string): boolean {
   if (p.includes("/node_modules/") || p.includes("\\node_modules\\")) return false;
   const resolvedAbs = path.resolve(p);
   // Guard against a bare prefix match (e.g. rootAbs "proj" matching sibling "proj-other").
@@ -18,10 +25,50 @@ export function isInternalDependency(resolved: SourceFile | undefined, rootAbs: 
 
 export interface DependencyEdge {
   to: string;
-  kind: "import" | "reExport";
+  kind: "import" | "reExport" | "require";
 }
 
-/** Internal file-level dependency edges from both imports and re-export declarations, kind-tagged. */
+const REQUIRE_RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"];
+const REQUIRE_INDEX_CANDIDATES = REQUIRE_RESOLVABLE_EXTENSIONS.map((ext) => `index${ext}`);
+
+/**
+ * Resolves a require("./x") call's string argument to a scanned file on disk — the same
+ * extension/index-file candidate approach entrypoints.ts's resolveModuleField uses for
+ * package.json entry fields, done by hand here since ts-morph has no API to resolve an arbitrary
+ * string specifier outside an actual import/export declaration. Only relative/absolute specifiers
+ * are attempted; a bare package name (require("react")) is already out of scope the same way import
+ * resolution excludes node_modules. Returns undefined — never throws — if nothing on disk matches,
+ * the same safe-failure-mode as every other soft edge case in this codebase.
+ */
+function resolveRequireSpecifier(sourceFile: SourceFile, specifier: string, rootAbs: string): string | undefined {
+  if (!specifier.startsWith(".") && !path.isAbsolute(specifier)) return undefined;
+  const base = path.resolve(path.dirname(sourceFile.getFilePath()), specifier);
+  const candidates = [base, ...REQUIRE_RESOLVABLE_EXTENSIONS.map((ext) => base + ext), ...REQUIRE_INDEX_CANDIDATES.map((f) => path.join(base, f))];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      const normalized = candidate.replace(/\\/g, "/");
+      return isInternalPath(normalized, rootAbs) ? normalized : undefined;
+    }
+  }
+  return undefined;
+}
+
+function getRequireEdges(sourceFile: SourceFile, rootAbs: string): DependencyEdge[] {
+  const edges: DependencyEdge[] = [];
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expr = call.getExpression();
+    if (expr.getKind() !== SyntaxKind.Identifier || expr.getText() !== "require") continue;
+    const args = call.getArguments();
+    if (args.length !== 1 || args[0].getKind() !== SyntaxKind.StringLiteral) continue;
+    const specifier = args[0].asKindOrThrow(SyntaxKind.StringLiteral).getLiteralValue();
+    const resolved = resolveRequireSpecifier(sourceFile, specifier, rootAbs);
+    if (resolved) edges.push({ to: resolved, kind: "require" });
+  }
+  return edges;
+}
+
+/** Internal file-level dependency edges from imports, re-export declarations, and require() calls
+ * (treated as file-level edges only — no export/symbol modeling for CommonJS, see README), kind-tagged. */
 export function getDependencyEdges(sourceFile: SourceFile, rootAbs: string): DependencyEdge[] {
   const edges: DependencyEdge[] = [];
 
@@ -38,6 +85,8 @@ export function getDependencyEdges(sourceFile: SourceFile, rootAbs: string): Dep
       edges.push({ to: resolved.getFilePath(), kind: "reExport" });
     }
   }
+
+  edges.push(...getRequireEdges(sourceFile, rootAbs));
 
   return edges;
 }
@@ -156,8 +205,28 @@ export function countFunctions(sourceFile: SourceFile): number {
   return getFunctionCandidates(sourceFile).length;
 }
 
+export interface ClassExpressionCandidate {
+  node: ClassExpression;
+  name: string | undefined;
+}
+
+/** `getClasses()` only returns class *declarations* — a class expression bound to a variable
+ * (`const X = class {}`) is a ClassExpression node instead, mirroring how ArrowFunction/
+ * FunctionExpression candidates above need their own binding check. Only the VariableDeclaration
+ * case applies here (unlike functions, there's no anonymous-default-export class-expression form —
+ * `export default class {}` is already a named-or-anonymous ClassDeclaration, already covered by
+ * getClasses()). */
+export function getClassExpressionCandidates(sourceFile: SourceFile): ClassExpressionCandidate[] {
+  const candidates: ClassExpressionCandidate[] = [];
+  for (const cls of sourceFile.getDescendantsOfKind(SyntaxKind.ClassExpression)) {
+    const varDecl = cls.getParentIfKind(SyntaxKind.VariableDeclaration);
+    if (varDecl) candidates.push({ node: cls, name: varDecl.getName() });
+  }
+  return candidates;
+}
+
 export function countClasses(sourceFile: SourceFile): number {
-  return sourceFile.getClasses().length;
+  return sourceFile.getClasses().length + getClassExpressionCandidates(sourceFile).length;
 }
 
 const COMPLEXITY_BOUNDARY_KINDS = new Set([

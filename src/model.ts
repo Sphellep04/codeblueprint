@@ -53,7 +53,7 @@ export interface SymbolModel {
   exported: boolean;
 }
 
-export type FileEdgeKind = "import" | "reExport";
+export type FileEdgeKind = "import" | "reExport" | "require";
 
 export interface FileEdge {
   kind: FileEdgeKind;

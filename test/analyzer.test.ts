@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { Project } from "ts-morph";
-import { getCyclomaticComplexity, getFunctionCandidates } from "../src/analyzer";
+import { getCyclomaticComplexity, getFunctionCandidates, getDependencyEdges, countClasses, getClassExpressionCandidates } from "../src/analyzer";
 
 function complexityOf(source: string, functionName: string): number {
   const project = new Project();
@@ -57,6 +60,86 @@ test("getCyclomaticComplexity: for/while/catch each add 1", () => {
     }
   `;
   assert.equal(complexityOf(src, "f"), 4); // 1 + for-of + catch + while
+});
+
+// resolveRequireSpecifier checks the real filesystem (fs.existsSync), not ts-morph's virtual
+// project — require() has no ts-morph module-specifier resolution to piggyback on, unlike import.
+// So these need real files on real disk, not createSourceFile's in-memory-only form.
+function makeRealProject(files: Record<string, string>): { dir: string; project: Project } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-analyzer-test-"));
+  for (const [relPath, content] of Object.entries(files)) {
+    const full = path.join(dir, relPath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content);
+  }
+  const project = new Project();
+  for (const relPath of Object.keys(files)) {
+    project.addSourceFileAtPath(path.join(dir, relPath));
+  }
+  return { dir, project };
+}
+
+test("getDependencyEdges: require('./x') resolves to a real scanned file, kind-tagged 'require'", () => {
+  const { dir, project } = makeRealProject({
+    "a.js": `const b = require("./b");\nmodule.exports = b;\n`,
+    "b.js": `module.exports = { value: 1 };\n`,
+  });
+  const rootAbs = path.resolve(dir);
+  const sf = project.getSourceFileOrThrow(path.join(dir, "a.js"));
+  const edges = getDependencyEdges(sf, rootAbs);
+  assert.deepEqual(
+    edges.map((e) => ({ to: path.basename(e.to), kind: e.kind })),
+    [{ to: "b.js", kind: "require" }]
+  );
+});
+
+test("getDependencyEdges: require() resolves through an index file candidate", () => {
+  const { dir, project } = makeRealProject({
+    "a.js": `const utils = require("./utils");\n`,
+    "utils/index.js": `module.exports = {};\n`,
+  });
+  const rootAbs = path.resolve(dir);
+  const sf = project.getSourceFileOrThrow(path.join(dir, "a.js"));
+  const edges = getDependencyEdges(sf, rootAbs);
+  assert.equal(edges.length, 1);
+  assert.equal(path.basename(edges[0].to), "index.js");
+  assert.equal(edges[0].kind, "require");
+});
+
+test("getDependencyEdges: require() of a bare package name is not treated as an internal edge", () => {
+  const { dir, project } = makeRealProject({ "a.js": `const react = require("react");\n` });
+  const rootAbs = path.resolve(dir);
+  const sf = project.getSourceFileOrThrow(path.join(dir, "a.js"));
+  assert.deepEqual(getDependencyEdges(sf, rootAbs), []);
+});
+
+test("getDependencyEdges: require() of a path that doesn't resolve to any real file is dropped, not thrown", () => {
+  const { dir, project } = makeRealProject({ "a.js": `const x = require("./does-not-exist");\n` });
+  const rootAbs = path.resolve(dir);
+  const sf = project.getSourceFileOrThrow(path.join(dir, "a.js"));
+  assert.deepEqual(getDependencyEdges(sf, rootAbs), []);
+});
+
+test("countClasses: a class expression bound to a variable is counted alongside class declarations", () => {
+  const project = new Project();
+  const sf = project.createSourceFile(
+    "test.ts",
+    `class Declared {}\nconst Expr = class {};\nconst notAClass = 5;\n`
+  );
+  assert.equal(countClasses(sf), 2);
+});
+
+test("getClassExpressionCandidates: name comes from the variable it's bound to; an unbound class expression is ignored", () => {
+  const project = new Project();
+  const sf = project.createSourceFile(
+    "test.ts",
+    `const Named = class {};\n[class {}].forEach(() => {});\n`
+  );
+  const candidates = getClassExpressionCandidates(sf);
+  assert.deepEqual(
+    candidates.map((c) => c.name),
+    ["Named"]
+  );
 });
 
 test("getCyclomaticComplexity: a nested function's branches don't inflate the outer function's count", () => {

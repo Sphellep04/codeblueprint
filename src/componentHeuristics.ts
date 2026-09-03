@@ -1,5 +1,5 @@
 import { SourceFile, SyntaxKind, Node } from "ts-morph";
-import { FunctionCandidate } from "./analyzer";
+import { FunctionCandidate, getClassExpressionCandidates } from "./analyzer";
 
 const COMPONENT_NAME_RE = /^[A-Z]/;
 const REACT_BASE_CLASS_RE = /^(React\.)?(Component|PureComponent)$/;
@@ -15,9 +15,9 @@ function hasJsx(candidate: FunctionCandidate): boolean {
 
 /**
  * Heuristic React component detection: capitalized (or anonymous default-export)
- * functions/arrows that render JSX, plus classes extending React.Component /
- * PureComponent. Known false positives: capitalized non-component factory
- * functions. Known false negatives: React.memo(function foo(){}) with a
+ * functions/arrows that render JSX, plus classes (declarations or expressions bound to a
+ * variable) extending React.Component / PureComponent. Known false positives: capitalized
+ * non-component factory functions. Known false negatives: React.memo(function foo(){}) with a
  * lowercase inner name, or components built via React.createElement without JSX.
  */
 export function getComponentNodes(sourceFile: SourceFile, functionCandidates: FunctionCandidate[]): Set<Node> {
@@ -35,6 +35,13 @@ export function getComponentNodes(sourceFile: SourceFile, functionCandidates: Fu
     const extendsExpr = cls.getExtends();
     if (extendsExpr && REACT_BASE_CLASS_RE.test(extendsExpr.getExpression().getText())) {
       nodes.add(cls);
+    }
+  }
+
+  for (const candidate of getClassExpressionCandidates(sourceFile)) {
+    const extendsExpr = candidate.node.getExtends();
+    if (extendsExpr && REACT_BASE_CLASS_RE.test(extendsExpr.getExpression().getText())) {
+      nodes.add(candidate.node);
     }
   }
 
