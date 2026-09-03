@@ -6,6 +6,7 @@ downstream chain — plus a structural summary, a relationship graph, a local we
 it visually, and a live MCP server so your AI assistant can query the same graph instead of grepping.
 
 - `--impact <file>`: the full transitive blast radius of changing a file — the signature feature
+- `--impact-diff`: the same blast radius, but for every file git currently reports as changed at once — what does *your actual uncommitted work* touch, not just one hand-picked file
 - Structural summary: files, components, functions, classes, imports/exports, circular deps, orphan files
 - `--graph`: a full file/symbol/usage dependency graph
 - `--hotspots`: most-connected files, circular-dependency chains, per-module coupling/complexity
@@ -130,6 +131,30 @@ that *is* the chain visualization; a synthetic tree would just reproduce what th
 free. `--impact` composes with `--json` (same format-toggle pattern as `--hotspots`) and is mutually
 exclusive with `--graph`/`--hotspots`/`--serve`.
 
+## Diff Impact (`--impact-diff`)
+
+```
+codeblueprint ./my-project --impact-diff
+codeblueprint ./my-project --impact-diff --json
+```
+
+Same blast-radius analysis as `--impact`, but for every file git currently reports as changed at
+once, instead of one manually-picked target — "what does my actual uncommitted work touch, right
+now." "Changed" means staged + unstaged modifications to tracked files (`git diff --name-only
+HEAD`) plus untracked files (`git status --porcelain`); a clean working tree or a directory that
+isn't a git repository just reports zero changed files rather than erroring. The result is the
+deduped *union* of every changed file's own impact set — a file you changed is never counted as
+"impacted" just because another one of your changes also touches it — plus a per-file breakdown
+(`perFile`) showing how much impact each individual change contributes, so you can spot which one
+of several changes is the risky one. `--impact-diff` composes with `--json` and is mutually
+exclusive with `--graph`/`--hotspots`/`--impact`/`--serve`/`--mcp`.
+
+`git`'s diff/status output is always relative to the repository's toplevel, not the directory
+`codeblueprint` was pointed at — resolved paths are normalized against the real repo root (via `git
+rev-parse --show-toplevel`) and then filtered back down to files under `<path>`, so pointing
+`codeblueprint` at one package of a larger monorepo only reports that package's own changes, not
+unrelated changes elsewhere in the same repo.
+
 ## Explorer (`--serve`)
 
 ```
@@ -137,7 +162,16 @@ codeblueprint ./my-project --serve
 codeblueprint ./my-project --serve --port 5000
 ```
 
-Starts a local HTTP server (default port `4787`) and opens your browser to a graphical Explorer: a file-tree sidebar, a pan/zoom/click dependency graph (Cytoscape.js), a search box that highlights matching files and fades the rest, a "Hide re-exports" toggle that fades out `reExport`-kind edges (`FileEdge.kind` is tagged specifically for this), and an inspect panel showing the selected file's metrics (imports/exports/functions/classes/components/complexity, entry-point status, incoming/outgoing edge counts). A Graph/Symbols/Hotspots toggle in the header switches views. Symbols shows the *selected file's* own functions/classes/components plus one hop of `calls`/`renders` edges into symbols in other files (`web/src/components/SymbolGraphView.tsx`, backed by `GET /api/code-graph` — the same `CodeGraph` data `--graph` prints, computed once at server startup). Hotspots renders the same data `--hotspots` prints as text — a connected-files list, cycle chains, and per-module coupling/complexity/dependency bars (`web/src/components/HotspotsPanel.tsx`), served from `GET /api/hotspots`. A "Show impact" button in the inspect panel fetches `GET /api/impact?file=<path>` (computed per-request, since the target varies per click, unlike the whole-project endpoints above) and highlights the result directly on the graph — the target file gets a distinct border, its impacted dependents turn gold, everything else fades, reusing the exact same highlight mechanism the search box already uses (impact takes priority over search while active, and clears on reselection or a new search term, so the two never need to be reconciled at once). A second button, "Open in editor," hits `GET /api/open-source?file=&line=`, which opens the file at that line in your local editor (VS Code via its CLI, falling back to the OS's default file handler) — clicking a symbol node in the Symbols view does the same, jumping straight to its declaration line. Unlike `--json`/`--graph`/`--hotspots`/`--impact`, `--serve` doesn't print anything machine-readable to stdout — it's meant to be looked at, not piped — so it's mutually exclusive with the other four (combining them is a usage error, not a silently-ignored combination).
+Starts a local HTTP server (default port `4787`) and opens your browser to a graphical Explorer: a file-tree sidebar shared across every view, a header toggle switching between six views (Overview, Graph, Architecture, Blueprint, Symbols, Hotspots), a command palette (`Ctrl`/`Cmd+K`) for jumping straight to any file or symbol by name, and a keyboard-shortcuts panel (press `?`) covering view-switching (`o`/`g`/`a`/`b`/`s`/`h`), search focus (`/`), and the palette.
+
+- **Overview** — the landing view: an Architecture Health score (the average of three independently-justified sub-scores — Modularity, Dependency Health, Complexity — each drillable into the specific files/reasons behind the number, never a bare number with no explanation) and a "Needs attention" list (circular dependencies, orphan files, high-coupling modules), every item clickable straight through to the relevant file/view.
+- **Graph** — a pan/zoom/click dependency graph (Cytoscape.js), a search box that highlights matching files and fades the rest, a "Hide re-exports" toggle that fades out `reExport`-kind edges (`FileEdge.kind` is tagged specifically for this), and an inspect panel showing the selected file's metrics (imports/exports/functions/classes/components/complexity, entry-point status, incoming/outgoing edge counts). A "Show impact" button in the inspect panel fetches `GET /api/impact?file=<path>` and highlights the result directly on the graph — the target file gets a distinct border, its impacted dependents turn gold, everything else fades, reusing the exact same highlight mechanism the search box already uses (impact takes priority over search while active, and clears on reselection or a new search term). Impact analysis renders as concentric rings by real hop distance around the target, rather than the graph's normal force-directed layout, so the tool's most differentiated moment looks distinct instead of reusing the generic dependency-graph shape. A header **"Diff Impact"** button (mutually exclusive with a single-file "Show impact") fetches `GET /api/diff-impact` and highlights the combined blast radius of every file git currently reports as changed — see "Diff Impact" above — with one ring-set per changed file. A second inspect-panel button, "Open in editor," hits `GET /api/open-source?file=&line=`, which opens the file at that line in your local editor (VS Code via its CLI, falling back to the OS's default file handler) — clicking a symbol node in the Symbols view does the same, jumping straight to its declaration line.
+- **Architecture** — files grouped into layers (Presentation, Application, Services, Data, Infrastructure, and an honest "Other" catch-all for anything the folder-convention heuristic can't classify) instead of one flat force-directed cloud.
+- **Blueprint** — an auto-generated, always-in-sync layered architecture diagram derived from the same layer classification, rendered as a fixed layout rather than an exploratory graph.
+- **Symbols** — the *selected file's* own functions/classes/components plus a multi-hop call-chain trace from any of its symbols (`web/src/components/SymbolGraphView.tsx`, backed by `GET /api/code-graph` — the same `CodeGraph` data `--graph` prints, computed once at server startup).
+- **Hotspots** — the same data `--hotspots` prints as text — a connected-files list, cycle chains, and per-module coupling/complexity/dependency bars (`web/src/components/HotspotsPanel.tsx`), served from `GET /api/hotspots`.
+
+Unlike `--json`/`--graph`/`--hotspots`/`--impact`/`--impact-diff`, `--serve` doesn't print anything machine-readable to stdout — it's meant to be looked at, not piped — so it's mutually exclusive with the other five (combining them is a usage error, not a silently-ignored combination).
 
 The Explorer's node set includes every scanned file, including orphans with zero edges — deliberately different from `CodeGraph.files`' edges-only shape (`--graph`), since a graph UI needs every file to draw as a node, not just the ones with a visible edge. This is `ExplorerData` (see `src/model.ts`): `ProjectModel.files` for the complete file list plus `codeGraph.ts`'s file-level edges, assembled by `orchestrator.runExplorerData()` in a single project parse.
 
@@ -153,7 +187,7 @@ codeblueprint ./my-project --mcp
 
 Starts a local [MCP](https://modelcontextprotocol.io) server over stdio, so an AI coding assistant
 (Claude Code, Cursor, Copilot, or any other MCP client) can query this project's dependency/symbol
-graph directly instead of grepping files. Six read-only tools, each a thin wrapper over the same
+graph directly instead of grepping files. Seven read-only tools, each a thin wrapper over the same
 analysis primitives every other flag uses — no separate analysis pipeline:
 
 - `get_summary` — project-wide structural summary (same data as the base command)
@@ -161,6 +195,7 @@ analysis primitives every other flag uses — no separate analysis pipeline:
 - `get_dependencies` — a file's direct dependencies and dependents
 - `find_symbol` — find functions/classes/components by name (case-insensitive substring match)
 - `get_impact` — the full transitive blast radius of changing a file (same as `--impact`)
+- `get_diff_impact` — the combined blast radius of every file git currently reports as changed (same as `--impact-diff`) — lets an AI agent sanity-check the blast radius of its own uncommitted edits before finishing a task
 - `get_hotspots` — most-connected files, circular-dependency chains, per-module coupling (same as `--hotspots`)
 
 Like `--serve`, the project is parsed exactly once at startup; every tool call after that is a cheap
@@ -263,7 +298,7 @@ relationships.
 
 ## Project layout
 
-`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). `graph.ts`'s `findDependents` (a BFS over the reversed dependency graph) and `entrypoints.ts`'s `computeRoutes` feed `orchestrator.runImpactAnalysis()`/`loadImpactContext()` (`--impact`, and a per-request `/api/impact` for the Explorer — the one endpoint that isn't computed once at server startup, since its result depends on which file was clicked). This split is deliberate — `orchestrator.ts`'s entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`/`runImpactAnalysis`) are the only things any consumer (CLI, server, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
+`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). `graph.ts`'s `findDependents` (a BFS over the reversed dependency graph) and `entrypoints.ts`'s `computeRoutes` feed `orchestrator.runImpactAnalysis()`/`loadImpactContext()` (`--impact`, and a per-request `/api/impact` for the Explorer — the one endpoint that isn't computed once at server startup, since its result depends on which file was clicked). `git.ts`'s `getChangedFiles()` (a thin `git diff`/`git status` wrapper, never throwing) feeds `orchestrator.runDiffImpactAnalysis()`/`loadDiffImpactContext()` the same way (`--impact-diff`, and `/api/diff-impact`) — the union of `findDependentsFromReverse` run once per changed file, reusing the exact same reversed graph and BFS `--impact` already built, no separate computation path. This split is deliberate — `orchestrator.ts`'s entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`/`runImpactAnalysis`/`runDiffImpactAnalysis`/`loadMcpContext`) are the only things any consumer (CLI, server, MCP, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
 
 ## Testing
 
@@ -271,6 +306,6 @@ relationships.
 npm test
 ```
 
-Runs `node:test` against `graph.ts` (including `findCyclePath`/`findDependents`), `analyzer.ts`'s `getCyclomaticComplexity`, `entrypoints.ts`'s `computeRoutes`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`/`formatImpactReport`, `codeGraph.ts`, `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`/`runImpactAnalysis`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points (including `about.tsx`'s import of a shared util, giving `--impact` a real affected-route case to assert against), a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`), plus `workspace.ts`'s workspace-detection primitives and a second integration suite against `fixtures/basic-monorepo` (a 2-package npm workspace with a cross-package `tsconfig` path alias) asserting the orphan-misreporting regression is actually fixed. `npm test` never requires `web/` to be built first.
+Runs `node:test` against `graph.ts` (including `findCyclePath`/`findDependents`), `analyzer.ts`'s `getCyclomaticComplexity`, `entrypoints.ts`'s `computeRoutes`, `modules.ts`, `utils/format.ts` (including `formatBar`), `report.ts`'s `formatHotspotReport`/`formatImpactReport`/`formatDiffImpactReport`, `codeGraph.ts`, `git.ts`'s `getChangedFiles` (against real hermetic temp git repos, including a subdirectory-of-a-larger-repo case since git's own diff/status output is toplevel-relative, not cwd-relative), `orchestrator.ts`'s `runExplorerData`/`runHotspotReport`/`runImpactAnalysis`/`runDiffImpactAnalysis`, `server.ts` (API shape and static serving, both against hermetic fixtures rather than the real `web/dist`), and an integration suite that asserts exact metric values against `fixtures/basic-react-app` — a hand-built fixture with a known circular pair, a barrel-style re-export cycle, a second disjoint cycle, a genuinely orphaned file, a CommonJS-only file (demonstrating the limitation above), Next.js `pages/*` entry points (including `about.tsx`'s import of a shared util, giving `--impact` a real affected-route case to assert against), a tsconfig path-alias import, a `memo`-wrapped and an anonymous-default-exported component, and a typed class/method pair (demonstrating `--graph`'s call-resolution through a `PropertyAccessExpression`), plus `workspace.ts`'s workspace-detection primitives and a second integration suite against `fixtures/basic-monorepo` (a 2-package npm workspace with a cross-package `tsconfig` path alias) asserting the orphan-misreporting regression is actually fixed. `npm test` never requires `web/` to be built first.
 
 The Explorer frontend (`web/`) has no automated tests — the project has no UI-render test infrastructure prior to this, and the fixture's known cycles/orphan/entry-points make it a good manual test bed. Verify frontend changes by running `codeblueprint ./fixtures/basic-react-app --serve` and checking the result in a browser, not just `tsc`/`vite build` succeeding.

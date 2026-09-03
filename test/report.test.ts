@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { formatHotspotReport, formatImpactReport } from "../src/report";
-import { HotspotReport, ImpactReport } from "../src/model";
+import { formatHotspotReport, formatImpactReport, formatDiffImpactReport } from "../src/report";
+import { HotspotReport, ImpactReport, DiffImpactReport } from "../src/model";
 
 const SAMPLE: HotspotReport = {
   rootDir: "/project",
@@ -60,5 +60,47 @@ test("formatImpactReport: zero impact renders a clear empty message instead of a
   const text = formatImpactReport({ ...IMPACT_SAMPLE, impactedFiles: [], impactedRoutes: [] });
   assert.match(text, /Potential impact: 0 files/);
   assert.match(text, /\(no files depend on this one\)/);
+  assert.match(text, /0 routes may be affected/);
+});
+
+const DIFF_IMPACT_SAMPLE: DiffImpactReport = {
+  rootDir: "/project",
+  projectName: "sample",
+  changedFiles: ["/project/src/auth.ts", "/project/src/db.ts"],
+  impactedFiles: ["/project/src/navbar.tsx", "/project/src/dashboard.tsx"],
+  impactedRoutes: ["/project/pages/settings.tsx"],
+  perFile: [
+    { file: "/project/src/auth.ts", impactedCount: 2 },
+    { file: "/project/src/db.ts", impactedCount: 1 },
+  ],
+};
+
+test("formatDiffImpactReport: includes the changed-file breakdown, combined impact, and route count", () => {
+  const text = formatDiffImpactReport(DIFF_IMPACT_SAMPLE);
+  assert.match(text, /Changed: 2 files/);
+  assert.match(text, /src\/auth\.ts \(2 impacted\)/);
+  assert.match(text, /src\/db\.ts \(1 impacted\)/);
+  assert.match(text, /Combined potential impact: 2 files/);
+  assert.match(text, /src\/navbar\.tsx/);
+  assert.match(text, /src\/dashboard\.tsx/);
+  assert.match(text, /1 route may be affected/);
+  assert.match(text, /pages\/settings\.tsx/);
+});
+
+test("formatDiffImpactReport: singular wording for exactly one changed file", () => {
+  const text = formatDiffImpactReport({ ...DIFF_IMPACT_SAMPLE, changedFiles: ["/project/src/auth.ts"], perFile: [DIFF_IMPACT_SAMPLE.perFile[0]] });
+  assert.match(text, /Changed: 1 file\b/);
+});
+
+test("formatDiffImpactReport: no changed files renders a clear message and skips every other section", () => {
+  const text = formatDiffImpactReport({ ...DIFF_IMPACT_SAMPLE, changedFiles: [], impactedFiles: [], impactedRoutes: [], perFile: [] });
+  assert.match(text, /No changed files detected \(clean working tree, or not a git repository\)\./);
+  assert.doesNotMatch(text, /Combined potential impact/);
+});
+
+test("formatDiffImpactReport: zero combined impact renders a clear empty message instead of an empty list", () => {
+  const text = formatDiffImpactReport({ ...DIFF_IMPACT_SAMPLE, impactedFiles: [], impactedRoutes: [] });
+  assert.match(text, /Combined potential impact: 0 files/);
+  assert.match(text, /\(nothing else depends on these files\)/);
   assert.match(text, /0 routes may be affected/);
 });
