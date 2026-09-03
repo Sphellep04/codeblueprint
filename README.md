@@ -75,7 +75,13 @@ Exports           431
 
 Circular deps       3
 Orphan files        8
+
+Run with --serve to explore visually, or --mcp to let your AI assistant query this directly.
 ```
+
+On a real terminal (not piped/redirected), the header and any nonzero Circular deps/Orphan files
+count are colorized — automatically disabled when output isn't a TTY, so `--json`/scripted/piped
+usage is never polluted with escape codes.
 
 `--json` prints the same data as a `Summary` object (see `src/model.ts`), including the raw file lists for each circular-dependency cluster and each orphan file — useful for scripting or as a stepping stone for Phase 2's graph visualization.
 
@@ -159,6 +165,11 @@ rev-parse --show-toplevel`) and then filtered back down to files under `<path>`,
 `codeblueprint` at one package of a larger monorepo only reports that package's own changes, not
 unrelated changes elsewhere in the same repo.
 
+Known gaps, same safe-failure-mode spirit as everything else in this README: a renamed file's `git
+status` line resolves to its new path only (the old path is dropped, not double-counted); a deleted
+file has no on-disk content left to analyze, so it's silently excluded from the report rather than
+erroring.
+
 ## Explorer (`--serve`)
 
 ```
@@ -230,8 +241,9 @@ practical issue with a naive single-project scan: a package that nothing else in
 (a leaf app, say) is no longer misreported as an orphan just because its own `package.json`/`index.*`
 weren't checked outside the invoked root — each workspace package's own entry points are now
 recognized too (`entrypoints.ts`'s `computeEntryPoints`, via a `packageRoots` parameter). Everything
-else — `--graph`, `--hotspots`, `--impact`, `--serve` — works across package boundaries for free once
-an edge exists, since none of them are aware a package boundary was ever crossed.
+else — `--graph`, `--hotspots`, `--impact`, `--impact-diff`, `--serve`, `--mcp` — works across package
+boundaries for free once an edge exists, since none of them are aware a package boundary was ever
+crossed.
 
 Detection is root-only: run `codeblueprint` against the monorepo's actual root, not a single package's
 own subdirectory nested inside a larger workspace — CodeBlueprint doesn't walk upward looking for an
@@ -302,7 +314,7 @@ relationships.
 
 ## Project layout
 
-`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `server.ts` (`--serve`) reuses the same primitives again via `orchestrator.runExplorerData()`, and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). `graph.ts`'s `findDependents` (a BFS over the reversed dependency graph) and `entrypoints.ts`'s `computeRoutes` feed `orchestrator.runImpactAnalysis()`/`loadImpactContext()` (`--impact`, and a per-request `/api/impact` for the Explorer — the one endpoint that isn't computed once at server startup, since its result depends on which file was clicked). `git.ts`'s `getChangedFiles()` (a thin `git diff`/`git status` wrapper, never throwing) feeds `orchestrator.runDiffImpactAnalysis()`/`loadDiffImpactContext()` the same way (`--impact-diff`, and `/api/diff-impact`) — the union of `findDependentsFromReverse` run once per changed file, reusing the exact same reversed graph and BFS `--impact` already built, no separate computation path. This split is deliberate — `orchestrator.ts`'s entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`/`runImpactAnalysis`/`runDiffImpactAnalysis`/`loadMcpContext`) are the only things any consumer (CLI, server, MCP, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
+`analyzer.ts`/`graph.ts`/`componentHeuristics.ts` produce plain data (`ProjectModel`/`Summary` in `model.ts`); `report.ts` is the only module that knows about stdout formatting. `codeGraph.ts` builds the `CodeGraph` data (`--graph`) on top of the same `analyzer.ts`/`componentHeuristics.ts` primitives, so file-level edges and function/component detection aren't computed twice. `orchestrator.runExplorerData()` derives `ExplorerData` from one parse — used directly by any future standalone/scripting consumer — while `server.ts` (`--serve`) instead calls `orchestrator.loadServerData()`, which derives that same `ExplorerData` alongside `HotspotReport`/`CodeGraph`/impact-computation closures from a single shared parse (see its own comment for why: three independent full ts-morph parses at every `--serve` startup would otherwise be paid for one), and serves the prebuilt `web/` frontend as static assets plus a `/api/explorer-data` JSON endpoint. `modules.ts` groups `FileModel`s into per-directory modules and computes their coupling/complexity/dependency numbers, feeding `orchestrator.runHotspotReport()` (`--hotspots`, and `/api/hotspots` for the Explorer). `graph.ts`'s `findDependents` (a BFS over the reversed dependency graph) and `entrypoints.ts`'s `computeRoutes` feed `orchestrator.runImpactAnalysis()`/`loadImpactContext()` (`--impact`, and a per-request `/api/impact` for the Explorer — the one endpoint that isn't computed once at server startup, since its result depends on which file was clicked). `git.ts`'s `getChangedFiles()` (a thin `git diff`/`git status` wrapper, never throwing) feeds `orchestrator.runDiffImpactAnalysis()`/`loadDiffImpactContext()` the same way (`--impact-diff`, and `/api/diff-impact`) — the union of `findDependentsFromReverse` run once per changed file, reusing the exact same reversed graph and BFS `--impact` already built, no separate computation path. This split is deliberate — `orchestrator.ts`'s entry points (`runAnalysis`/`runGraphAnalysis`/`runExplorerData`/`runHotspotReport`/`runImpactAnalysis`/`runDiffImpactAnalysis`/`loadMcpContext`) are the only things any consumer (CLI, server, MCP, or a future scripting use) needs to call; none of them touch ts-morph or stdout formatting directly.
 
 ## Testing
 
