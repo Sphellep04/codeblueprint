@@ -116,7 +116,7 @@ export function createServer(
   uiDir: string | undefined = resolveUiDir(),
   openInEditor: (filePath: string, line: number) => void = defaultOpenInEditor
 ): http.Server {
-  const { explorerData, hotspotReport, computeImpact, codeGraph, resolveFile } = loadServerData(rootDir);
+  const { explorerData, hotspotReport, computeImpact, computeDiffImpact, codeGraph, resolveFile } = loadServerData(rootDir);
   const explorerDataJson = JSON.stringify(explorerData);
   const hotspotReportJson = JSON.stringify(hotspotReport);
   const codeGraphJson = JSON.stringify(codeGraph);
@@ -201,6 +201,15 @@ export function createServer(
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(report));
+      return;
+    }
+
+    // No query params — unlike /api/impact, the target is always "whatever git currently reports as
+    // changed," computed fresh per request (git state can change between two requests in the same
+    // --serve session, unlike the fixed project graph).
+    if (req.url === "/api/diff-impact") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(computeDiffImpact()));
       return;
     }
 

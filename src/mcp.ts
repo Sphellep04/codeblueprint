@@ -99,6 +99,16 @@ export async function startMcpServer(rootDir: string): Promise<void> {
   );
 
   server.registerTool(
+    "get_diff_impact",
+    {
+      description:
+        "Combined transitive blast radius of every file git currently reports as changed (staged, unstaged, and untracked) — what does my actual uncommitted work touch right now, not just one file.",
+      inputSchema: z.object({}),
+    },
+    async () => ok((await getCtx()).getDiffImpact())
+  );
+
+  server.registerTool(
     "get_hotspots",
     { description: "Most-connected files, circular-dependency chains, and per-module coupling/complexity.", inputSchema: z.object({}) },
     async () => ok((await getCtx()).getHotspots())

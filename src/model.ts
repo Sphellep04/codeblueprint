@@ -134,3 +134,27 @@ export interface ImpactReport {
   /** Subset of impactedFiles that are routes — see entrypoints.ts's computeRoutes. */
   impactedRoutes: string[];
 }
+
+export interface DiffImpactFileBreakdown {
+  file: string;
+  /** Size of this one file's own (not the union's) impact set — lets the caller see which specific
+   * change is the risky one, since the top-level impactedFiles below is a deduped union. */
+  impactedCount: number;
+}
+
+/**
+ * Same shape/intent as ImpactReport, but for every file git reports as changed at once (see
+ * git.ts's getChangedFiles) rather than one manually-picked target — "what does my actual
+ * uncommitted work touch right now," not "what does this one file touch."
+ */
+export interface DiffImpactReport {
+  rootDir: string;
+  projectName: string;
+  /** Absolute paths, as returned by getChangedFiles — empty if nothing is changed or this isn't a git repo. */
+  changedFiles: string[];
+  /** Deduped union of every changed file's own transitive impact set. Never includes a changedFiles entry. */
+  impactedFiles: string[];
+  /** Subset of impactedFiles that are routes — see entrypoints.ts's computeRoutes. */
+  impactedRoutes: string[];
+  perFile: DiffImpactFileBreakdown[];
+}

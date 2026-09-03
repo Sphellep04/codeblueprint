@@ -17,8 +17,20 @@ import { computeEntryPoints, computeRoutes } from "./entrypoints";
 import { detectWorkspace } from "./workspace";
 import { buildCodeGraph, buildFileEdges } from "./codeGraph";
 import { buildModuleMetrics } from "./modules";
-import { FileModel, ProjectModel, Summary, CodeGraph, ExplorerData, HotspotReport, ImpactReport, FileEdge, SymbolModel } from "./model";
+import {
+  FileModel,
+  ProjectModel,
+  Summary,
+  CodeGraph,
+  ExplorerData,
+  HotspotReport,
+  ImpactReport,
+  DiffImpactReport,
+  FileEdge,
+  SymbolModel,
+} from "./model";
 import { SourceFile } from "ts-morph";
+import { getChangedFiles } from "./git";
 
 export class CodeBlueprintError extends Error {}
 
@@ -265,6 +277,73 @@ export function loadImpactContext(rootDir: string): { computeImpact: (targetFile
 }
 
 /**
+ * "What does my actual uncommitted work touch, right now" — the union of every git-changed file's
+ * own transitive impact set, not one manually-picked target. impactedFiles/perFile both exclude any
+ * other changedFiles entry from a given file's own impact walk: a file you changed is "the change,"
+ * not "a downstream effect" of another change, the same way ImpactReport.impactedFiles never
+ * includes targetFile itself.
+ *
+ * changedFiles isn't resolved through git internally here — it's the same context-building split
+ * computeImpact already uses (a resolved target in, a report out) — so this stays trivially testable
+ * against explicit file lists without needing a real git fixture. runDiffImpactAnalysis below is the
+ * thin wrapper that actually calls getChangedFiles.
+ */
+function computeDiffImpact(ctx: ImpactContext, changedFiles: string[]): DiffImpactReport {
+  // Resolved first, in its own pass: findDependentsFromReverse returns fully-resolved absolute
+  // paths, so the exclusion filter below has to compare against resolved changed paths too — a set
+  // built from the raw (possibly relative, possibly differently-cased) input strings would never
+  // match, silently letting a changed file re-appear in its own union as if untouched.
+  const resolvedChanged: string[] = [];
+  for (const file of changedFiles) {
+    try {
+      resolvedChanged.push(resolveKnownFile(ctx.files, ctx.rootAbs, file));
+    } catch {
+      // A git-detected change (e.g. a deleted file, or one outside the scanned extensions) isn't
+      // guaranteed to match a resolvable scanned file the way a user-typed --impact path is —
+      // dropped, not thrown, same safe-failure-mode as every other soft edge case in this codebase.
+      continue;
+    }
+  }
+  const changedSet = new Set(resolvedChanged);
+
+  const impactedSet = new Set<string>();
+  const perFile: DiffImpactReport["perFile"] = [];
+  for (const resolved of resolvedChanged) {
+    const fileImpact = findDependentsFromReverse(ctx.reverse, resolved).filter((f) => !changedSet.has(f));
+    perFile.push({ file: resolved, impactedCount: fileImpact.length });
+    for (const f of fileImpact) impactedSet.add(f);
+  }
+
+  const impactedFiles = Array.from(impactedSet);
+  return {
+    rootDir: ctx.rootAbs,
+    projectName: ctx.projectName,
+    changedFiles: resolvedChanged,
+    impactedFiles,
+    impactedRoutes: impactedFiles.filter((f) => ctx.routes.has(f)),
+    perFile,
+  };
+}
+
+/** changedFiles defaults to the real git-detected set; the explicit-array form exists so tests can
+ * exercise computeDiffImpact's union/exclusion logic without a live git fixture. */
+export function runDiffImpactAnalysis(rootDir: string, changedFiles?: string[]): DiffImpactReport {
+  const ctx = buildProjectContext(rootDir);
+  const files = changedFiles ?? getChangedFiles(ctx.rootAbs);
+  return computeDiffImpact(buildImpactContextFrom(ctx, buildFileGraph(ctx.files)), files);
+}
+
+/** Server-only: same one-parse-many-requests shape as loadImpactContext — re-reads git status on
+ * every call (cheap; the project graph itself is only built once), since unlike a single-file
+ * --impact target, what's "changed" can legitimately differ between two requests in the same
+ * --serve session. */
+export function loadDiffImpactContext(rootDir: string): { computeDiffImpact: () => DiffImpactReport } {
+  const ctx = buildProjectContext(rootDir);
+  const impactCtx = buildImpactContextFrom(ctx, buildFileGraph(ctx.files));
+  return { computeDiffImpact: () => computeDiffImpact(impactCtx, getChangedFiles(ctx.rootAbs)) };
+}
+
+/**
  * Everything the --serve Explorer needs, from exactly one project parse. createServer previously
  * called runExplorerData/runHotspotReport/loadImpactContext independently, each doing its own full
  * ts-morph parse — three full parses (plus three separate FileModel[] builds, including the
@@ -275,6 +354,7 @@ export function loadServerData(rootDir: string): {
   explorerData: ExplorerData;
   hotspotReport: HotspotReport;
   computeImpact: (targetFile: string) => ImpactReport;
+  computeDiffImpact: () => DiffImpactReport;
   codeGraph: CodeGraph;
   resolveFile: (targetFile: string) => string;
 } {
@@ -287,6 +367,7 @@ export function loadServerData(rootDir: string): {
     explorerData: deriveExplorerData(ctx, edges),
     hotspotReport: deriveHotspotReport(ctx, edges, graph),
     computeImpact: (targetFile: string) => computeImpact(impactCtx, targetFile),
+    computeDiffImpact: () => computeDiffImpact(impactCtx, getChangedFiles(ctx.rootAbs)),
     codeGraph: buildCodeGraph(ctx.sourceFiles, ctx.rootAbs),
     resolveFile: (targetFile: string) => resolveKnownFile(ctx.files, ctx.rootAbs, targetFile),
   };
@@ -305,6 +386,7 @@ export function loadMcpContext(rootDir: string): {
   getDependencies: (file: string) => { dependsOn: string[]; dependents: string[] };
   findSymbol: (query: string) => SymbolModel[];
   getImpact: (file: string) => ImpactReport;
+  getDiffImpact: () => DiffImpactReport;
   getHotspots: () => HotspotReport;
 } {
   const ctx = buildProjectContext(rootDir);
@@ -336,6 +418,8 @@ export function loadMcpContext(rootDir: string): {
     },
 
     getImpact: (file) => computeImpact(impactCtx, file),
+
+    getDiffImpact: () => computeDiffImpact(impactCtx, getChangedFiles(ctx.rootAbs)),
 
     getHotspots: () => hotspotReport,
   };

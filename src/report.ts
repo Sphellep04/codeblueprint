@@ -1,4 +1,4 @@
-import { Summary, HotspotReport, ImpactReport } from "./model";
+import { Summary, HotspotReport, ImpactReport, DiffImpactReport } from "./model";
 import { formatRows, formatBar, Row } from "./utils/format";
 import { bold, warn, dim } from "./utils/ansi";
 
@@ -121,4 +121,38 @@ export function formatImpactReport(report: ImpactReport): string {
 
 export function printImpactReport(report: ImpactReport): void {
   process.stdout.write(formatImpactReport(report) + "\n");
+}
+
+export function formatDiffImpactReport(report: DiffImpactReport): string {
+  const changedCount = report.changedFiles.length;
+  const fileCount = report.impactedFiles.length;
+  const routeCount = report.impactedRoutes.length;
+
+  const lines: string[] = [bold("CodeBlueprint — Diff Impact"), "", `Project: ${report.projectName}`, ""];
+
+  if (changedCount === 0) {
+    lines.push("No changed files detected (clean working tree, or not a git repository).");
+    return lines.join("\n");
+  }
+
+  lines.push(`Changed: ${changedCount} file${changedCount === 1 ? "" : "s"}`);
+  for (const p of report.perFile) {
+    lines.push(`  ${relativeToRoot(p.file, report.rootDir)} (${p.impactedCount} impacted)`);
+  }
+
+  lines.push("", `Combined potential impact: ${fileCount} file${fileCount === 1 ? "" : "s"}`);
+  if (fileCount === 0) {
+    lines.push("  (nothing else depends on these files)");
+  } else {
+    for (const f of report.impactedFiles) lines.push("  " + relativeToRoot(f, report.rootDir));
+  }
+
+  lines.push("", `${routeCount} route${routeCount === 1 ? "" : "s"} may be affected`);
+  for (const r of report.impactedRoutes) lines.push("  " + relativeToRoot(r, report.rootDir));
+
+  return lines.join("\n");
+}
+
+export function printDiffImpactReport(report: DiffImpactReport): void {
+  process.stdout.write(formatDiffImpactReport(report) + "\n");
 }

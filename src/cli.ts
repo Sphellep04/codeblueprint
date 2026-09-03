@@ -2,8 +2,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Command, Option, InvalidArgumentError } from "commander";
-import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, CodeBlueprintError } from "./orchestrator";
-import { printReport, printJson, printHotspotReport, printImpactReport } from "./report";
+import { runAnalysis, runGraphAnalysis, runHotspotReport, runImpactAnalysis, runDiffImpactAnalysis, CodeBlueprintError } from "./orchestrator";
+import { printReport, printJson, printHotspotReport, printImpactReport, printDiffImpactReport } from "./report";
 import { startServer, DEFAULT_PORT } from "./server";
 import { startMcpServer } from "./mcp";
 
@@ -22,6 +22,17 @@ function readOwnVersion(): string {
   } catch {
     return "0.0.0";
   }
+}
+
+interface CliOptions {
+  json?: boolean;
+  graph?: boolean;
+  hotspots?: boolean;
+  impact?: string;
+  impactDiff?: boolean;
+  serve?: boolean;
+  port?: number;
+  mcp?: boolean;
 }
 
 const program = new Command();
@@ -47,7 +58,13 @@ program
       "serve",
       "hotspots",
       "mcp",
+      "impactDiff",
     ])
+  )
+  .addOption(
+    new Option("--impact-diff", "print the combined transitive impact of every file git reports as changed (staged, unstaged, and untracked)").conflicts(
+      ["graph", "serve", "hotspots", "mcp", "impact"]
+    )
   )
   .addOption(
     new Option("--serve", "start a local web server with the CodeBlueprint Explorer").conflicts(["json", "graph", "hotspots", "impact", "mcp"])
@@ -62,7 +79,7 @@ program
       "serve",
     ])
   )
-  .action((targetPath: string, options: { json?: boolean; graph?: boolean; hotspots?: boolean; impact?: string; serve?: boolean; port?: number; mcp?: boolean }) => {
+  .action((targetPath: string, options: CliOptions) => {
     if (options.port !== undefined && !options.serve) {
       program.error("error: --port can only be used together with --serve");
     }
@@ -90,6 +107,13 @@ program
           printJson(report);
         } else {
           printImpactReport(report);
+        }
+      } else if (options.impactDiff) {
+        const report = runDiffImpactAnalysis(targetPath);
+        if (options.json) {
+          printJson(report);
+        } else {
+          printDiffImpactReport(report);
         }
       } else if (options.json) {
         printJson(runAnalysis(targetPath));
