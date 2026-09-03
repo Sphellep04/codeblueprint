@@ -14,6 +14,10 @@ it visually, and a live MCP server so your AI assistant can query the same graph
 - `--mcp`: an MCP server so Claude Code/Cursor/Copilot can query the graph directly, no grepping
 - Basic npm/yarn monorepo support — see "Monorepo support" below
 
+![Overview: an Architecture Health score with drillable sub-scores, and a clickable "Needs attention" list of circular dependencies, orphan files, and high-coupling modules](docs/screenshots/overview.png)
+
+![Diff Impact: the combined blast radius of changed files, rendered as concentric rings by real hop distance instead of a generic force-directed graph](docs/screenshots/impact.png)
+
 ## Quick start
 
 ```
