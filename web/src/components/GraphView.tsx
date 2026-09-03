@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import type { ExplorerData, CodeGraph, HotspotReport } from "../types";
 import type { ImpactHighlight } from "../lib/impactHighlight";
+import { computeHopDistances } from "../lib/hopDistance";
 import { relativePath } from "../lib/paths";
 import { classifyFileKind, FILE_KIND_SHAPE, FILE_KIND_COLOR } from "../lib/fileKind";
 import { incomingEdgeCount } from "../lib/metrics";
@@ -177,6 +178,42 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
         node.toggleClass("faded", !targetSet.has(id) && !impactedSet.has(id));
       });
       cy.edges().addClass("faded");
+
+      // Arrange the impacted nodes as concentric rings by real hop distance around the target(s) —
+      // this is the tool's single most differentiated moment (nothing else here looks like a
+      // generic force-directed dependency graph), so it gets its own distinct shape instead of
+      // reusing cose with some nodes turned gold. Positioned manually (not via cytoscape's built-in
+      // concentric layout run on a sub-collection) and anchored on the target's own current
+      // position — a collection-scoped layout run has no notion of "where the user is already
+      // looking," and would place the ring using its own internal bounding-box default instead,
+      // landing it wherever that math happens to put it rather than next to the target.
+      const targetNodes = impact.targetFiles.map((id) => cy.$id(id)).filter((n) => n.length > 0);
+      if (targetNodes.length > 0) {
+        const anchorX = targetNodes.reduce((sum, n) => sum + n.position("x"), 0) / targetNodes.length;
+        const anchorY = targetNodes.reduce((sum, n) => sum + n.position("y"), 0) / targetNodes.length;
+
+        const hopDistances = computeHopDistances(data.edges, impact.targetFiles);
+        const byLevel = new Map<number, string[]>();
+        for (const id of impact.impactedFiles) {
+          const level = hopDistances.get(id) ?? 1;
+          if (!byLevel.has(level)) byLevel.set(level, []);
+          byLevel.get(level)!.push(id);
+        }
+
+        const RING_SPACING = 90;
+        for (const [level, ids] of byLevel) {
+          const radius = level * RING_SPACING;
+          ids.forEach((id, i) => {
+            const angle = (2 * Math.PI * i) / ids.length;
+            cy.$id(id)
+              .stop(true)
+              .animate(
+                { position: { x: anchorX + radius * Math.cos(angle), y: anchorY + radius * Math.sin(angle) } },
+                { duration: 500, easing: "ease-out" }
+              );
+          });
+        }
+      }
 
       // A brief pulse draws the eye to every target the instant impact analysis starts — one target
       // for a single-file impact, one per changed file for Diff Impact.
