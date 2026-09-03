@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchExplorerData, fetchHotspotReport, fetchImpact, fetchCodeGraph, openInEditor } from "./lib/api";
+import { fetchExplorerData, fetchHotspotReport, fetchImpact, fetchDiffImpact, fetchCodeGraph, openInEditor } from "./lib/api";
+import { impactReportToHighlight, diffImpactReportToHighlight } from "./lib/impactHighlight";
 import { buildFileTree } from "./lib/tree";
 import Sidebar from "./components/Sidebar";
 import GraphView from "./components/GraphView";
@@ -14,7 +15,7 @@ import ArchitectureView from "./components/ArchitectureView";
 import BlueprintView from "./components/BlueprintView";
 import Logo from "./components/Logo";
 import { OverviewIcon, GraphIcon, ArchitectureIcon, BlueprintIcon, SymbolsIcon, HotspotsIcon } from "./components/Icons";
-import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "./types";
+import type { ExplorerData, HotspotReport, ImpactReport, DiffImpactReport, CodeGraph } from "./types";
 
 type LoadState =
   | { status: "loading" }
@@ -29,6 +30,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [view, setView] = useState<View>("overview");
   const [impact, setImpact] = useState<ImpactReport | null>(null);
+  const [diffImpact, setDiffImpact] = useState<DiffImpactReport | null>(null);
   const [hideReExports, setHideReExports] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -55,11 +57,13 @@ export default function App() {
   const onSelect = useCallback((path: string) => {
     setSelectedPath(path);
     setImpact(null); // a new selection invalidates whatever impact set was showing
+    setDiffImpact(null);
   }, []);
 
   const onSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
     setImpact(null); // search and impact highlighting never coexist — the new search takes over
+    setDiffImpact(null);
   }, []);
 
   const onShowImpact = useCallback(async (filePath: string) => {
@@ -67,9 +71,21 @@ export default function App() {
       const report = await fetchImpact(filePath);
       if (selectedPathRef.current !== filePath) return; // selection moved on while this was in flight
       setImpact(report);
+      setDiffImpact(null);
     } catch (err) {
       // Non-fatal — the inspect panel just won't show an impact result; log for diagnosis.
       console.error("Failed to load impact data:", err);
+    }
+  }, []);
+
+  const onShowDiffImpact = useCallback(async () => {
+    setView("graph");
+    try {
+      const report = await fetchDiffImpact();
+      setDiffImpact(report);
+      setImpact(null);
+    } catch (err) {
+      console.error("Failed to load diff impact data:", err);
     }
   }, []);
 
@@ -166,6 +182,9 @@ export default function App() {
 
   const { data, hotspots, codeGraph } = state;
   const selectedFile = selectedPath ? data.files.find((f) => f.absolutePath === selectedPath) : undefined;
+  // impact/diffImpact are mutually exclusive (each clears the other on set) — GraphView/ImpactBanner
+  // render whichever is active through one shared shape, see lib/impactHighlight.ts.
+  const graphHighlight = impact ? impactReportToHighlight(impact) : diffImpact ? diffImpactReportToHighlight(diffImpact) : null;
 
   return (
     <div className="app-layout">
@@ -204,6 +223,9 @@ export default function App() {
               Hotspots
             </button>
           </div>
+          <button type="button" className="diff-impact-button" onClick={onShowDiffImpact} title="Blast radius of every file git reports as changed">
+            Diff Impact
+          </button>
           {view === "graph" && (
             <label className="hide-reexports-toggle">
               <input type="checkbox" checked={hideReExports} onChange={(e) => setHideReExports(e.target.checked)} />
@@ -252,7 +274,7 @@ export default function App() {
                 hotspots={hotspots}
                 selectedPath={selectedPath}
                 searchTerm={searchTerm}
-                impact={impact}
+                impact={graphHighlight}
                 onSelect={onSelect}
                 hideReExports={hideReExports}
               />

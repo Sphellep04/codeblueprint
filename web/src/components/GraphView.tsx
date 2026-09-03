@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
-import type { ExplorerData, ImpactReport, CodeGraph, HotspotReport } from "../types";
+import type { ExplorerData, CodeGraph, HotspotReport } from "../types";
+import type { ImpactHighlight } from "../lib/impactHighlight";
 import { relativePath } from "../lib/paths";
 import { classifyFileKind, FILE_KIND_SHAPE, FILE_KIND_COLOR } from "../lib/fileKind";
 import { incomingEdgeCount } from "../lib/metrics";
@@ -14,7 +15,7 @@ interface GraphViewProps {
   hotspots: HotspotReport;
   selectedPath: string | null;
   searchTerm: string;
-  impact: ImpactReport | null;
+  impact: ImpactHighlight | null;
   onSelect: (path: string) => void;
   hideReExports: boolean;
 }
@@ -167,20 +168,24 @@ export default function GraphView({ data, codeGraph, hotspots, selectedPath, sea
     if (!cy) return;
 
     if (impact) {
+      const targetSet = new Set(impact.targetFiles);
       const impactedSet = new Set(impact.impactedFiles);
       cy.nodes().forEach((node) => {
         const id = node.id();
         node.removeClass("highlighted");
-        node.toggleClass("impact-target", id === impact.targetFile);
-        node.toggleClass("faded", id !== impact.targetFile && !impactedSet.has(id));
+        node.toggleClass("impact-target", targetSet.has(id));
+        node.toggleClass("faded", !targetSet.has(id) && !impactedSet.has(id));
       });
       cy.edges().addClass("faded");
 
-      const target = cy.$id(impact.targetFile);
-      const baseSize = target.data("size") as number;
-      // A brief pulse draws the eye to the target the instant impact analysis starts.
-      target.stop(true).animate({ style: { width: baseSize * 1.8, height: baseSize * 1.8 } }, { duration: 220, easing: "ease-out" });
-      target.animate({ style: { width: baseSize, height: baseSize } }, { duration: 220, easing: "ease-in" });
+      // A brief pulse draws the eye to every target the instant impact analysis starts — one target
+      // for a single-file impact, one per changed file for Diff Impact.
+      for (const targetId of impact.targetFiles) {
+        const target = cy.$id(targetId);
+        const baseSize = target.data("size") as number;
+        target.stop(true).animate({ style: { width: baseSize * 1.8, height: baseSize * 1.8 } }, { duration: 220, easing: "ease-out" });
+        target.animate({ style: { width: baseSize, height: baseSize } }, { duration: 220, easing: "ease-in" });
+      }
 
       // impact.impactedFiles is produced by graph.ts's findDependentsFromReverse, a plain
       // queue-based BFS — its return order is therefore already hop-distance order (closest

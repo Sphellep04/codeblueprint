@@ -56,3 +56,24 @@ test("getChangedFiles: a directory that isn't a git repo returns an empty array,
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-not-a-repo-"));
   assert.deepEqual(getChangedFiles(dir), []);
 });
+
+test("getChangedFiles: rootAbs being a subdirectory of a larger repo still resolves paths correctly", () => {
+  // git diff/status report paths relative to the repo's toplevel, not cwd — this reproduces that by
+  // git-init'ing one level above the directory actually passed to getChangedFiles, the same shape as
+  // codeblueprint being pointed at one package of a monorepo (or, in practice, this project's own
+  // fixtures/ directory living inside the codeblueprint repo itself).
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cb-git-monorepo-"));
+  execFileSync("git", ["init", "-q"], { cwd: repoRoot });
+  const pkgDir = path.join(repoRoot, "packages", "app");
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, "index.ts"), "export const a = 1;\n");
+  fs.writeFileSync(path.join(repoRoot, "other.ts"), "export const z = 0;\n"); // outside pkgDir
+  execFileSync("git", ["add", "."], { cwd: repoRoot });
+  execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd: repoRoot });
+
+  fs.writeFileSync(path.join(pkgDir, "index.ts"), "export const a = 2;\n");
+  fs.writeFileSync(path.join(repoRoot, "other.ts"), "export const z = 9;\n"); // changed too, but outside pkgDir
+
+  const changed = getChangedFiles(pkgDir).map(toPosix);
+  assert.deepEqual(changed, [toPosix(path.join(pkgDir, "index.ts"))]);
+});

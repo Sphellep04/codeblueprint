@@ -62,6 +62,20 @@ export interface ImpactReport {
   impactedRoutes: string[];
 }
 
+export interface DiffImpactFileBreakdown {
+  file: string;
+  impactedCount: number;
+}
+
+export interface DiffImpactReport {
+  rootDir: string;
+  projectName: string;
+  changedFiles: string[];
+  impactedFiles: string[];
+  impactedRoutes: string[];
+  perFile: DiffImpactFileBreakdown[];
+}
+
 export type SymbolKind = "function" | "method" | "class" | "component";
 
 export interface SymbolModel {

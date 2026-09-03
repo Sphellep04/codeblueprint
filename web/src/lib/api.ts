@@ -1,4 +1,4 @@
-import type { ExplorerData, HotspotReport, ImpactReport, CodeGraph } from "../types";
+import type { ExplorerData, HotspotReport, ImpactReport, DiffImpactReport, CodeGraph } from "../types";
 
 export async function fetchExplorerData(): Promise<ExplorerData> {
   const res = await fetch("/api/explorer-data");
@@ -22,6 +22,14 @@ export async function fetchImpact(filePath: string): Promise<ImpactReport> {
     throw new Error(`Failed to load impact data: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as ImpactReport;
+}
+
+export async function fetchDiffImpact(): Promise<DiffImpactReport> {
+  const res = await fetch("/api/diff-impact");
+  if (!res.ok) {
+    throw new Error(`Failed to load diff impact data: ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as DiffImpactReport;
 }
 
 export async function fetchCodeGraph(): Promise<CodeGraph> {

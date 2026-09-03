@@ -203,6 +203,28 @@ body {
   gap: 0.75rem;
 }
 
+.diff-impact-button {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cb-red) 60%, transparent);
+  background: color-mix(in srgb, var(--cb-red) 10%, transparent);
+  color: var(--cb-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease-out, transform 0.1s ease-out;
+}
+
+.diff-impact-button:hover {
+  background: color-mix(in srgb, var(--cb-red) 20%, transparent);
+}
+
+.diff-impact-button:active {
+  transform: scale(0.97);
+}
+
 .hide-reexports-toggle {
   display: flex;
   align-items: center;
