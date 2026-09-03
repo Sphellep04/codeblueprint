@@ -235,8 +235,10 @@ To register it with an MCP client, add an entry to the client's MCP config (e.g.
 
 Point `<path>` at a monorepo's root and CodeBlueprint automatically detects an npm/yarn workspace (a
 `"workspaces"` field in the root `package.json`, either the plain array form or yarn's `{"packages":
-[...]}` object form) and scans every discovered package as part of the same project — no flag needed,
-the same way `tsconfig.json`/`.gitignore` are already picked up automatically. This fixes the biggest
+[...]}` object form) or, if that's absent, a pnpm workspace (a `pnpm-workspace.yaml` file's own
+`packages:` list, parsed with a real YAML parser) — and scans every discovered package as part of the
+same project — no flag needed, the same way `tsconfig.json`/`.gitignore` are already picked up
+automatically. This fixes the biggest
 practical issue with a naive single-project scan: a package that nothing else in the monorepo imports
 (a leaf app, say) is no longer misreported as an orphan just because its own `package.json`/`index.*`
 weren't checked outside the invoked root — each workspace package's own entry points are now
@@ -284,14 +286,9 @@ relationships.
 
 - **The Symbols view is per-file, not whole-project** — selecting a file shows its own symbols plus one hop of `calls`/`renders` neighbors, not a project-wide call graph; a deliberate scope choice for readability, not a technical limitation (`--graph`'s full `CodeGraph` data has everything needed for the latter).
 - **"Focus on this module"** (isolating one directory's subgraph in the Graph view) is still deferred — see "Explorer" above.
-- **`npm audit` flags a moderate esbuild advisory** (via Vite's dev server, which allows cross-origin requests to read its responses) in `web/`'s dev dependencies. It affects `vite dev`/`npm run dev --workspace=web` only — the *built* static bundle `--serve` actually ships has no dev server in it. Not force-upgraded to Vite 8 yet since that's a breaking change; worth revisiting later.
 
 ## Known Phase 6 limitations
 
-- **npm/yarn workspaces only** — `pnpm-workspace.yaml` isn't parsed. A hand-rolled YAML parser risked
-  silently producing a wrong package set on a malformed/partial parse, which is worse than the
-  current safe failure mode (pnpm monorepos are simply scanned as a single flat project, same as
-  before this phase). Deferred, not attempted.
 - **Root-only detection, no ancestor walk** — see "Monorepo support" above.
 - **Workspace glob patterns**: only a single trailing `*` segment (`"packages/*"`) is expanded.
   `**`, mid-path wildcards, and brace expansion aren't supported — every real workspace field

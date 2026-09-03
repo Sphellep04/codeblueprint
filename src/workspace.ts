@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { parse as parseYaml } from "yaml";
 
 /**
  * Reads rootAbs's own package.json "workspaces" field, supporting both npm's plain array form
@@ -27,6 +28,32 @@ export function parseWorkspacePatterns(rootAbs: string): string[] | null {
     return workspaces.packages.filter((p: unknown): p is string => typeof p === "string");
   }
   return null;
+}
+
+/**
+ * Reads rootAbs's own pnpm-workspace.yaml "packages" field — pnpm's own workspace config format,
+ * not read from package.json at all. Same safe-fail contract as parseWorkspacePatterns: returns null
+ * (never throws) if the file is absent or doesn't parse as valid YAML, or if "packages" isn't an
+ * array of strings. Uses a real YAML parser (the `yaml` package) rather than a hand-rolled one — a
+ * hand-rolled parser risks silently producing a wrong package set on a malformed/partial parse,
+ * which would be worse than this project's usual safe-failure-mode of simply not detecting a
+ * workspace at all.
+ */
+export function parsePnpmWorkspacePatterns(rootAbs: string): string[] | null {
+  const yamlPath = path.join(rootAbs, "pnpm-workspace.yaml");
+  if (!fs.existsSync(yamlPath)) return null;
+
+  let doc: unknown;
+  try {
+    doc = parseYaml(fs.readFileSync(yamlPath, "utf8"));
+  } catch {
+    return null;
+  }
+
+  if (!doc || typeof doc !== "object" || !("packages" in doc)) return null;
+  const packages = (doc as { packages: unknown }).packages;
+  if (!Array.isArray(packages)) return null;
+  return packages.filter((p): p is string => typeof p === "string");
 }
 
 /**
@@ -61,11 +88,12 @@ export function expandPattern(workspaceRootAbs: string, pattern: string): string
 /**
  * Detects whether rootAbs is a workspace root and, if so, returns every discovered package
  * directory (deduplicated, absolute paths) — rootAbs itself is NOT included, since it's the
- * workspace root, not one of its packages. Returns null when rootAbs has no "workspaces" field, in
+ * workspace root, not one of its packages. Checks npm/yarn's package.json "workspaces" field first;
+ * if that's absent, falls back to pnpm-workspace.yaml. Returns null when rootAbs matches neither, in
  * which case callers should treat this as an ordinary single-package project.
  */
 export function detectWorkspace(rootAbs: string): string[] | null {
-  const patterns = parseWorkspacePatterns(rootAbs);
+  const patterns = parseWorkspacePatterns(rootAbs) ?? parsePnpmWorkspacePatterns(rootAbs);
   if (!patterns) return null;
 
   const packageRoots = new Set<string>();
