@@ -1,6 +1,6 @@
 {
   "name": "codeblueprint",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "See what breaks before you touch it — full blast-radius impact analysis for JavaScript/TypeScript/React/Next.js codebases, with a live MCP server for AI coding assistants.",
   "license": "MIT",
   "author": "Phellep Shapopi",
