@@ -124,6 +124,26 @@ export function buildSymbolTable(sourceFiles: SourceFile[]): SymbolTable {
     }
   }
 
+  // Second pass, after every file's own declarations are registered: attribute re-export barrels.
+  // `import { greet } from "@scope/lib"` resolves targetPath to the *barrel* file (lib's index.ts),
+  // but the loop above only ever registers byExportName entries keyed by the *originating* file
+  // (greet.ts) — a barrel with no local declarations of its own (just `export * from "./greet"`)
+  // never gets its own entries. sf.getExportedDeclarations() already resolves transitively through
+  // such re-exports, straight from ts-morph's own export resolution — so for every file, register
+  // its exported names against whatever symbol id the originating declaration already has. Purely
+  // additive: a declaration nodeToId doesn't already know about (nothing this codebase's own
+  // candidate-scanning above registers, e.g. a re-exported interface/type) is silently skipped, same
+  // safe-failure-mode as everywhere else — this can only add attribution, never invent a wrong one.
+  for (const sf of sourceFiles) {
+    const filePath = sf.getFilePath();
+    for (const [exportName, decls] of sf.getExportedDeclarations()) {
+      for (const decl of decls) {
+        const symbolId = table.nodeToId.get(decl);
+        if (symbolId) table.byExportName.set(exportKey(filePath, exportName), symbolId);
+      }
+    }
+  }
+
   return table;
 }
 
@@ -166,17 +186,36 @@ interface UsageSite {
 function collectUsageSites(sf: SourceFile): UsageSite[] {
   const sites: UsageSite[] = [];
 
+  const BOUND_CALL_METHODS = new Set(["bind", "call", "apply"]);
+
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = call.getExpression();
     if (expr.getKind() === SyntaxKind.Identifier) {
       sites.push({ siteNode: call, identifier: expr.asKindOrThrow(SyntaxKind.Identifier), kind: "calls" });
     } else if (expr.getKind() === SyntaxKind.PropertyAccessExpression) {
-      const nameNode = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getNameNode();
+      const propAccess = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+      const nameNode = propAccess.getNameNode();
       if (nameNode.getKind() === SyntaxKind.Identifier) {
-        sites.push({ siteNode: call, identifier: nameNode.asKindOrThrow(SyntaxKind.Identifier), kind: "calls" });
+        const methodName = nameNode.asKindOrThrow(SyntaxKind.Identifier).getText();
+        if (BOUND_CALL_METHODS.has(methodName)) {
+          // `foo.bind(x)`/`foo.call(x)`/`foo.apply(x)`: "bind"/"call"/"apply" itself never resolves
+          // to a project symbol (nothing declares it), so the real target is one level in — the
+          // object the method is being called on, not the method name.
+          const inner = propAccess.getExpression();
+          if (inner.getKind() === SyntaxKind.Identifier) {
+            sites.push({ siteNode: call, identifier: inner.asKindOrThrow(SyntaxKind.Identifier), kind: "calls" });
+          } else if (inner.getKind() === SyntaxKind.PropertyAccessExpression) {
+            const innerName = inner.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getNameNode();
+            if (innerName.getKind() === SyntaxKind.Identifier) {
+              sites.push({ siteNode: call, identifier: innerName.asKindOrThrow(SyntaxKind.Identifier), kind: "calls" });
+            }
+          }
+        } else {
+          sites.push({ siteNode: call, identifier: nameNode.asKindOrThrow(SyntaxKind.Identifier), kind: "calls" });
+        }
       }
-      // Computed member calls (`obj[expr]()`) and calls via .bind/.call/.apply are not resolved —
-      // deferred, see README's "Known Phase 2 limitations".
+      // Computed member calls (`obj[expr]()`) are not resolved — deferred, see README's
+      // "Known Phase 2 limitations".
     }
   }
 
@@ -185,8 +224,16 @@ function collectUsageSites(sf: SourceFile): UsageSite[] {
     const tagName = tag.getTagNameNode();
     if (tagName.getKind() === SyntaxKind.Identifier) {
       sites.push({ siteNode: tag, identifier: tagName.asKindOrThrow(SyntaxKind.Identifier), kind: "renders" });
+    } else if (tagName.getKind() === SyntaxKind.PropertyAccessExpression) {
+      // Dotted tag name (`<Foo.Bar/>`) — mirrors the call-expression PropertyAccessExpression
+      // handling above: resolve the accessed name ("Bar"), not the namespace/object it's accessed on.
+      const nameNode = tagName.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getNameNode();
+      if (nameNode.getKind() === SyntaxKind.Identifier) {
+        sites.push({ siteNode: tag, identifier: nameNode.asKindOrThrow(SyntaxKind.Identifier), kind: "renders" });
+      }
     }
-    // Dotted (`<Foo.Bar/>`) and namespaced JSX tag names are not resolved — deferred, same limitation.
+    // Namespaced JSX tag names (`<ns:tag/>`, rare/legacy JSX syntax) are not resolved — deferred,
+    // same limitation.
   }
 
   return sites;

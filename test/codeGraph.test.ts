@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { Project } from "ts-morph";
 import { runGraphAnalysis } from "../src/orchestrator";
-import { buildFileEdges, buildSymbolTable } from "../src/codeGraph";
+import { buildFileEdges, buildSymbolTable, buildUsageEdges } from "../src/codeGraph";
 import { CodeGraph } from "../src/model";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "basic-react-app");
@@ -149,6 +149,41 @@ test("buildUsageEdges negative: an unattributed module-top-level call produces n
   // index.tsx's top-level `mount();` has no enclosing symbol, so nothing should call "mount" itself.
   const anyEdgeToMount = g.usages.some((u) => symbolLabel(g, u.to) === "index.tsx#mount");
   assert.equal(anyEdgeToMount, false);
+});
+
+test("buildUsageEdges positive: a dotted JSX tag (<NS.Bar/>) resolves through a namespace import", () => {
+  const project = new Project();
+  const barFile = project.createSourceFile("Bar.tsx", `export function Bar() { return null; }\n`);
+  const consumerFile = project.createSourceFile(
+    "consumer.tsx",
+    `import * as NS from "./Bar";\nfunction Widget() { return <NS.Bar />; }\n`
+  );
+  const table = buildSymbolTable([barFile, consumerFile]);
+  const usages = buildUsageEdges([barFile, consumerFile], table);
+
+  const widget = table.symbols.find((s) => s.name === "Widget");
+  const bar = table.symbols.find((s) => s.name === "Bar");
+  assert.ok(widget && bar);
+  const usage = usages.find((u) => u.from === widget!.id && u.to === bar!.id);
+  assert.ok(usage, "expected Widget to render Bar through the NS.Bar dotted tag");
+  assert.equal(usage?.kind, "renders");
+});
+
+test("buildUsageEdges positive: foo.bind(...)/foo.call(...) resolve to foo, not to the unresolvable 'bind'/'call' name", () => {
+  const project = new Project();
+  const sf = project.createSourceFile(
+    "test.ts",
+    `function target() {}\nfunction caller() {\n  const bound = target.bind(null);\n  target.call(null);\n  return bound;\n}\n`
+  );
+  const table = buildSymbolTable([sf]);
+  const usages = buildUsageEdges([sf], table);
+
+  const caller = table.symbols.find((s) => s.name === "caller");
+  const target = table.symbols.find((s) => s.name === "target");
+  assert.ok(caller && target);
+  const usage = usages.find((u) => u.from === caller!.id && u.to === target!.id);
+  assert.ok(usage, "expected caller to resolve a 'calls' edge to target through .bind()/.call()");
+  assert.equal(usage?.kind, "calls");
 });
 
 test("buildUsageEdges negative: returning a symbol without calling or rendering it produces no edge", () => {

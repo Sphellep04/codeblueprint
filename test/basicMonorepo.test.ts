@@ -47,6 +47,19 @@ test("basic-monorepo fixture: lib's barrel re-export (index.ts -> greet.ts) is a
   assert.equal(barrel?.kind, "reExport");
 });
 
+test("basic-monorepo fixture: named import through lib's barrel is attributed to greet's actual symbol (ImportEdge)", () => {
+  // Regression test for the "named imports through a re-export barrel aren't attributed" gap:
+  // app/index.ts does `import { greet } from "@basic-monorepo/lib"`, which resolves to the barrel
+  // (lib/index.ts, `export * from "./greet"`), not to greet.ts directly — before the fix, no
+  // ImportEdge was emitted at all for this import, even though the file-level and usage edges were
+  // already correct.
+  const graph = runGraphAnalysis(FIXTURE);
+  const greet = graph.symbols.find((s) => s.name === "greet");
+  assert.ok(greet, "expected a greet symbol to be registered");
+  const appImportsGreet = graph.imports.some((e) => basename(e.file) === "index.ts" && e.file.includes("/app/") && e.symbol === greet!.id);
+  assert.equal(appImportsGreet, true);
+});
+
 test("basic-monorepo fixture: run() calls greet() across the package boundary (usage edge)", () => {
   const graph = runGraphAnalysis(FIXTURE);
   const run = graph.symbols.find((s) => s.name === "run");
