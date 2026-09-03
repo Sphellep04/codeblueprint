@@ -16,23 +16,30 @@ it visually, and a live MCP server so your AI assistant can query the same graph
 ## Quick start
 
 ```
-npx codeblueprint ./my-project
+cd my-project
+npx codeblueprint
 ```
 
-No install needed — `npx` fetches and runs it. Add `--json`/`--graph`/`--hotspots`/`--impact`/`--serve`/`--mcp` per the flags below.
+No install needed — `npx` fetches and runs it. With no path argument, it analyzes whatever
+directory you're already in — the same convention `git status`/`eslint .` use. Point it at a
+different directory with `npx codeblueprint ./my-project`. Add `--json`/`--graph`/`--hotspots`/
+`--impact`/`--serve`/`--mcp` per the flags below.
 
 ## Usage
 
 ```
-codeblueprint <path>
-codeblueprint <path> --json
-codeblueprint <path> --graph
-codeblueprint <path> --hotspots [--json]
-codeblueprint <path> --impact <file> [--json]
-codeblueprint <path> --serve [--port <number>]
-codeblueprint <path> --mcp
+codeblueprint [path]
+codeblueprint [path] --json
+codeblueprint [path] --graph
+codeblueprint [path] --hotspots [--json]
+codeblueprint [path] --impact <file> [--json]
+codeblueprint [path] --impact-diff [--json]
+codeblueprint [path] --serve [--port <number>]
+codeblueprint [path] --mcp
 codeblueprint --version
 ```
+
+`[path]` defaults to the current directory when omitted.
 
 ## Local development
 

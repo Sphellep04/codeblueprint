@@ -41,7 +41,7 @@ program
   .name("codeblueprint")
   .description("See what breaks before you touch it — full blast-radius impact analysis for a JS/TS/React/Next.js project")
   .version(readOwnVersion())
-  .argument("<path>", "path to the project to analyze")
+  .argument("[path]", "path to the project to analyze (defaults to the current directory)")
   .option("--json", "print machine-readable JSON instead of the formatted report")
   .option("--graph", "print the code graph (files/symbols/imports/call-and-render edges) as JSON")
   .addOption(
@@ -79,7 +79,10 @@ program
       "serve",
     ])
   )
-  .action((targetPath: string, options: CliOptions) => {
+  .action((pathArg: string | undefined, options: CliOptions) => {
+    // No path given — analyze wherever the user's terminal already is, so `codeblueprint` alone
+    // (no argument) works the same way `git status`/`eslint .` do inside a project directory.
+    const targetPath = pathArg ?? process.cwd();
     if (options.port !== undefined && !options.serve) {
       program.error("error: --port can only be used together with --serve");
     }
